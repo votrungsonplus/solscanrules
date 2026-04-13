@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SCAN SOL BOT - Command Center</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- ===== TOP BAR ===== -->
+        <header class="top-bar">
+            <div class="logo">
+                <div class="logo-icon"><i class="fas fa-satellite-dish"></i></div>
+                <span class="logo-text">SCAN SOL BOT</span>
+                <span class="status-dot" id="connectionStatus" title="Connection Status"></span>
+            </div>
+            <div class="auto-reload-control">
+                <label for="autoReloadSelect">Tự tải lại</label>
+                <select id="autoReloadSelect" aria-label="Chọn chu kỳ tự tải lại trang">
+                    <option value="5">5s</option>
+                    <option value="10">10s</option>
+                    <option value="15">15s</option>
+                    <option value="30" selected>30s</option>
+                    <option value="0">Tắt</option>
+                </select>
+                <span id="autoReloadCountdown" class="auto-reload-countdown">30s</span>
+            </div>
+            <div class="top-stats">
+                <div class="stat-chip">
+                    <i class="fas fa-dollar-sign"></i>
+                    <span>SOL</span>
+                    <strong id="solPrice">$---</strong>
+                </div>
+                <div class="stat-chip">
+                    <i class="fas fa-search"></i>
+                    <span>Scanned</span>
+                    <strong id="totalScanned">0</strong>
+                </div>
+                <div class="stat-chip pass">
+                    <i class="fas fa-check-circle"></i>
+                    <span>Passed</span>
+                    <strong id="totalPassed">0</strong>
+                </div>
+                <div class="stat-chip">
+                    <i class="fas fa-shopping-cart"></i>
+                    <span>Bought</span>
+                    <strong id="totalBought">0</strong>
+                </div>
+                <div class="stat-chip pnl" id="pnlChip">
+                    <i class="fas fa-chart-line"></i>
+                    <span>PnL</span>
+                    <strong id="dailyPnl">0 SOL</strong>
+                </div>
+                <div class="stat-chip winrate" id="winrate1d" title="Win rate Today (since 9 AM) | ≥x1.1 = Win, ≤x1.0 = Loss">
+                    <i class="fas fa-percentage"></i>
+                    <span>Win Today</span>
+                    <strong>--%</strong>
+                </div>
+                <div class="stat-chip winrate" id="winrate3d" title="Win rate 3 Days">
+                    <i class="fas fa-percentage"></i>
+                    <span>Win 3D</span>
+                    <strong>--%</strong>
+                </div>
+                <div class="stat-chip winrate" id="winrate7d" title="Win rate 7 Days">
+                    <i class="fas fa-percentage"></i>
+                    <span>Win 7D</span>
+                    <strong>--%</strong>
+                </div>
+                <div class="stat-chip winrate" id="winrateall" title="Total Win rate (All Time)">
+                    <i class="fas fa-percentage"></i>
+                    <span>Win ALL</span>
+                    <strong>--%</strong>
+                </div>
+                <div class="stat-chip">
+                    <i class="fas fa-clock"></i>
+                    <span>Uptime</span>
+                    <strong id="uptime">00:00</strong>
+                </div>
+            </div>
+        </header>
+
+        <!-- ===== MAIN 3-COLUMN LAYOUT ===== -->
+        <main class="grid-layout">
+
+            <!-- ====== COLUMN 1: TOKEN FEED ====== -->
+            <section class="panel col-feed">
+                <div class="panel-header">
+                    <h2><i class="fas fa-stream"></i> Token Feed</h2>
+                    <div class="feed-counter" id="feedCounter">0</div>
+                </div>
+                <!-- Search -->
+                <div class="search-bar">
+                    <input type="text" id="contractSearch" placeholder="Paste contract address...">
+                    <button id="searchBtn"><i class="fas fa-search"></i></button>
+                </div>
+                <!-- Filter tabs -->
+                <div class="feed-tabs">
+                    <button class="tab active" data-filter="all">All</button>
+                    <button class="tab" data-filter="pending">Pending</button>
+                    <button class="tab" data-filter="pass">Pass</button>
+                    <button class="tab" data-filter="fail">Fail</button>
+                </div>
+                <!-- Token list -->
+                <div class="feed-list" id="tokenFeed">
+                    <div class="placeholder-text"><i class="fas fa-satellite-dish"></i><br>Listening for new tokens...</div>
+                </div>
+            </section>
+
+            <!-- ====== COLUMN 2: ANALYSIS DETAIL ====== -->
+            <section class="panel col-analysis">
+                <div class="panel-header">
+                    <h2><i class="fas fa-microscope"></i> Analysis Detail</h2>
+                    <span class="analysis-timer" id="analysisTimer"></span>
+                </div>
+                <div id="liveAnalysis" class="analysis-content">
+                    <div class="empty-state">
+                        <div class="empty-icon"><i class="fas fa-crosshairs"></i></div>
+                        <p>Select a token from the feed or wait for new analysis</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ====== COLUMN 3: CONTROL & STATS ====== -->
+            <section class="panel col-controls">
+                <!-- Tab navigation -->
+                <div class="control-tabs">
+                    <button class="ctrl-tab active" data-panel="passed">
+                        <i class="fas fa-trophy"></i> Passed History
+                    </button>
+                    <button class="ctrl-tab" data-panel="top10">
+                        <i class="fas fa-crown"></i> Top 10
+                    </button>
+                    <button class="ctrl-tab" data-panel="history">
+                        <i class="fas fa-history"></i> History
+                    </button>
+                    <button class="ctrl-tab" data-panel="sniper">
+                        <i class="fas fa-bolt"></i> Sniper
+                    </button>
+                    <button class="ctrl-tab" data-panel="positions">
+                        <i class="fas fa-satellite-dish"></i> Positions
+                    </button>
+                    <button class="ctrl-tab" data-panel="settings">
+                        <i class="fas fa-cog"></i> Settings
+                    </button>
+                </div>
+
+                <!-- Panel: Passed Tokens 24h -->
+                <div class="ctrl-panel active" id="panel-passed">
+                    <div class="panel-actions">
+                        <button id="refreshPassedBtn" class="action-btn-sm" title="Refresh PnL from DexScreener">
+                            <i class="fas fa-sync-alt"></i> Refresh PnL
+                        </button>
+                        <span id="refreshStatusMsg" class="refresh-status-msg"></span>
+                    </div>
+                    <div class="passed-list" id="passedTokensContainer">
+                        <div class="placeholder-text">No passed tokens in history</div>
+                    </div>
+                </div>
+
+                <!-- Panel: Top 10 Leaderboard -->
+                <div class="ctrl-panel" id="panel-top10">
+                    <div class="period-toggle">
+                        <button class="period-btn active" data-period="24h">24 Giờ</button>
+                        <button class="period-btn" data-period="all">Toàn Thời Gian</button>
+                    </div>
+                    <div class="top10-list" id="top10Container">
+                        <div class="placeholder-text">Not enough data to calculate top 10</div>
+                    </div>
+                </div>
+
+                <!-- Panel: Trade History -->
+                <div class="ctrl-panel" id="panel-history">
+                    <div class="trade-list" id="tradeHistoryContainer">
+                        <div class="placeholder-text">No trades yet</div>
+                    </div>
+                </div>
+
+                <!-- Panel: Quick Snipe (Manual Swap) -->
+                <div class="ctrl-panel" id="panel-sniper">
+                    <div class="sniper-container">
+                        <h3><i class="fas fa-crosshairs"></i> Fast Manual Execution</h3>
+                        <p class="sniper-desc">Force buy or sell any token via PumpPortal or Jupiter V6.</p>
+                        
+                        <div class="sniper-input-group">
+                            <label>Token Contract Address (Mint)</label>
+                            <input type="text" id="sniperMintInput" placeholder="Paste Base58 Mint Address...">
+                        </div>
+                        
+                        <div class="sniper-input-group">
+                            <label>Amount</label>
+                            <input type="number" id="sniperAmountInput" step="0.01" min="0" placeholder="e.g. 0.1 (SOL for Buy, % for Sell)">
+                        </div>
+
+                        <div class="sniper-action-btns">
+                            <button id="btnSniperBuy" class="btn-snipe buy"><i class="fas fa-rocket"></i> FORCE BUY (SOL)</button>
+                            <button id="btnSniperSell" class="btn-snipe sell"><i class="fas fa-bomb"></i> FORCE SELL (%)</button>
+                        </div>
+
+                        <div id="sniperStatusLog" class="sniper-log"></div>
+                    </div>
+                </div>
+
+                <!-- Panel: Active Positions -->
+                <div class="ctrl-panel" id="panel-positions">
+                    <div class="positions-header" style="display:flex; justify-content:space-between; align-items:flex-start;">
+                        <div>
+                            <h3><i class="fas fa-satellite-dish"></i> Danh sách vị thế đã mua</h3>
+                            <p class="sniper-desc">Những token Bot đang nắm giữ chờ chốt lời hoặc cắt lỗ.</p>
+                        </div>
+                        <button id="btnSyncPositions" class="btn-refresh" title="Đồng bộ với số dư ví thực tế">
+                            <i class="fas fa-sync-alt"></i> Sync Wallet
+                        </button>
+                    </div>
+                    <div class="trade-list" id="positionsContainer">
+                        <div class="placeholder-text">Chưa cầm Token nào trong tay</div>
+                    </div>
+                </div>
+
+                <!-- Panel: Settings & Rules -->
+                <div class="ctrl-panel" id="panel-settings">
+                    <div class="settings-content">
+                        <!-- REAL TRADING -->
+                        <div class="config-section trading-section">
+                            <h3><i class="fas fa-wallet"></i> Real Trading</h3>
+                            <div class="wallet-info" id="walletInfoBar">
+                                <div class="wallet-balance-row">
+                                    <span class="wallet-label"><i class="fas fa-money-bill-wave"></i> Balance</span>
+                                    <strong class="wallet-balance-value" id="walletBalanceDisplay">--- SOL</strong>
+                                    <button id="refreshBalanceBtn" class="action-btn-xs" title="Refresh Balance"><i class="fas fa-sync-alt"></i></button>
+                                </div>
+                                <div class="wallet-address-row">
+                                    <span class="wallet-label"><i class="fas fa-key"></i> Wallet</span>
+                                    <code class="wallet-addr" id="walletAddressDisplay">Not configured</code>
+                                </div>
+                            </div>
+                            <div class="config-grid">
+                                <div class="config-item highlight-buy">
+                                    <label>🛒 Auto-Buy <i class="fas fa-question-circle help-icon" title="Bật/Tắt tự động mua khi token vượt qua bộ lọc rules"></i></label>
+                                    <label class="switch">
+                                        <input type="checkbox" id="autoBuyToggle">
+                                        <span class="slider"></span>
+                                    </label>
+                                </div>
+                                <div class="config-item highlight-sell">
+                                    <label>🔄 Auto-Sell <i class="fas fa-question-circle help-icon" title="Bật/Tắt tự động bán khi chạm TP/SL hoặc phát hiện Rug"></i></label>
+                                    <label class="switch">
+                                        <input type="checkbox" id="autoSellToggle">
+                                        <span class="slider"></span>
+                                    </label>
+                                </div>
+                                <div class="config-item">
+                                    <label>Buy Amount (SOL) <i class="fas fa-question-circle help-icon" title="Số lượng SOL chi ra cho mỗi lệnh mua tự động"></i></label>
+                                    <input type="number" id="buyAmountInput" step="0.01" min="0.01" class="config-input">
+                                </div>
+                                <div class="config-item">
+                                    <label>Buy Slippage (%) <i class="fas fa-question-circle help-icon" title="% Trượt giá tối đa chấp nhận khi mua (Nên để 15-25% để land nhanh)"></i></label>
+                                    <input type="number" id="buySlippageInput" step="1" min="1" max="100" class="config-input">
+                                </div>
+                                <div class="config-item">
+                                    <label>Sell Slippage (%) <i class="fas fa-question-circle help-icon" title="% Trượt giá tối đa chấp nhận khi bán"></i></label>
+                                    <input type="number" id="sellSlippageInput" step="1" min="1" max="100" class="config-input">
+                                </div>
+                                <div class="config-item">
+                                    <label>Take Profit (%) <i class="fas fa-question-circle help-icon" title="Mục tiêu lợi nhuận (%) để tự động bán chốt lời"></i></label>
+                                    <input type="number" id="takeProfitInput" step="1" min="1" class="config-input">
+                                </div>
+                                <div class="config-item">
+                                    <label>Stop Loss (%) <i class="fas fa-question-circle help-icon" title="Ngưỡng lỗ tối đa (%) để tự động bán cắt lỗ"></i></label>
+                                    <input type="number" id="stopLossInput" step="1" min="1" class="config-input">
+                                </div>
+                                <div class="config-item">
+                                    <label>Max Positions <i class="fas fa-question-circle help-icon" title="Số lượng kèo tối đa được giữ cùng lúc"></i></label>
+                                    <input type="number" id="maxPositionsInput" step="1" min="1" class="config-input">
+                                </div>
+                                <div class="config-item">
+                                    <label>Daily Loss Limit (SOL) <i class="fas fa-question-circle help-icon" title="Giới hạn lỗ tổng cộng trong ngày trước khi bot dừng trade"></i></label>
+                                    <input type="number" id="dailyLossInput" step="0.1" min="0" class="config-input">
+                                </div>
+                                <div class="config-item">
+                                    <label>Jito Bundle <i class="fas fa-question-circle help-icon" title="Sử dụng mạng Jito để tăng tốc độ land tx và chống Front-run"></i></label>
+                                    <span class="config-badge" id="jitoStatus">--</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Monitoring Config -->
+                        <div class="config-section">
+                            <h3><i class="fas fa-binoculars"></i> Monitoring Config</h3>
+                            <div class="config-grid">
+                                <div class="config-item">
+                                    <label>Early Buyers (View)</label>
+                                    <input type="number" id="earlyBuyersInput" step="1" min="1" max="20" class="config-input">
+                                </div>
+                                <div class="config-item">
+                                    <label>Min Buyers to Pass</label>
+                                    <input type="number" id="minBuyersToPassInput" step="1" min="1" max="20" class="config-input">
+                                </div>
+                                <div class="config-item">
+                                    <label>Show All Buyers (Inc. Dev)</label>
+                                    <label class="switch">
+                                        <input type="checkbox" id="showAllBuyersToggle">
+                                        <span class="slider"></span>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Rules -->
+                        <div class="config-section">
+                            <div class="config-header-row">
+                                <h3><i class="fas fa-shield-alt"></i> Rules Engine</h3>
+                                <div class="sync-controls">
+                                    <span id="syncStatus" class="sync-status-badge"></span>
+                                    <button id="syncConfigBtn" class="sync-action-btn" title="Ghi đè tất cả cài đặt hiện tại vào hệ thống và Database">
+                                        <i class="fas fa-save"></i> Sync Config
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="rules-list" id="rulesContainer"></div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="js/app.js?v=4"></script>
+</body>
+</html>
