@@ -9,7 +9,7 @@ const settings = require('../config/settings');
 const logger = require('../utils/logger');
 const { shortenAddress, formatSol } = require('../utils/helpers');
 
-const { SolanaConnection: solana } = require('./solana-connection');
+const { SolanaConnection: solana, RPC_CATEGORY } = require('./solana-connection');
 const detector = require('./pumpfun-detector');
 const walletAnalyzer = require('../analyzers/wallet-analyzer');
 const devAnalyzer = require('../analyzers/dev-analyzer');
@@ -51,7 +51,7 @@ class Orchestrator extends EventEmitter {
     ));
 
     try {
-      const infos = await solana.execute((conn) => conn.getMultipleAccountsInfo(accountPubkeys));
+      const infos = await solana.execute((conn) => conn.getMultipleAccountsInfo(accountPubkeys), RPC_CATEGORY.METADATA);
 
       return accounts.map((acc, index) => {
         const addr = accountPubkeys[index].toBase58();
@@ -596,8 +596,8 @@ class Orchestrator extends EventEmitter {
 
       // Fetch largest accounts and actual token supply in parallel
       const [largestAccounts, tokenSupplyResult] = await Promise.all([
-        solana.executeRace(conn => conn.getTokenLargestAccounts(pubkey)),
-        solana.executeRace(conn => conn.getTokenSupply(pubkey)),
+        solana.execute(conn => conn.getTokenLargestAccounts(pubkey), RPC_CATEGORY.METADATA),
+        solana.execute(conn => conn.getTokenSupply(pubkey), RPC_CATEGORY.METADATA),
       ]);
 
       const allAccounts = largestAccounts.value;
@@ -987,6 +987,7 @@ class Orchestrator extends EventEmitter {
     }
 
     const buyers = earlyBuyers || [];
+    const buyerCountAtStart = buyers.length; // Snapshot to detect new arrivals during analysis
     const requiredBuyers = settings.monitoring.earlyBuyersToMonitor;
     const hasEnoughBuyers = buyers.length >= requiredBuyers;
 
@@ -1241,10 +1242,50 @@ class Orchestrator extends EventEmitter {
       }
     } catch (err) {
       logger.error(`Full analysis failed for ${shortenAddress(mint)}: ${err.message}`);
+      // Persist the error to DB so the token is never silently lost
+      try {
+        tracker.recordScan({
+          mint,
+          tokenName: tokenData.name,
+          tokenSymbol: tokenData.symbol,
+          deployer: tokenData.deployer,
+          ruleResult: {
+            shouldBuy: false,
+            summary: `❌ Analysis error: ${err.message}`,
+            results: [{ ruleId: 'analysis_error', ruleName: 'Analysis Pipeline', ruleType: 'BLOCK', passed: false, reason: err.message }],
+          },
+          actionTaken: 'BLOCKED',
+          timestamp: Date.now(),
+        });
+      } catch (dbErr) {
+        logger.error(`Failed to persist analysis error for ${shortenAddress(mint)}: ${dbErr.message}`);
+      }
       this.processingTokens.delete(mint);
       this._scheduleRecheck(mint, 8000, 'gặp lỗi phân tích tạm thời');
     } finally {
       this.processingTokens.delete(mint);
+
+      // === FIX RACE CONDITION: Check if more buyers arrived during analysis ===
+      const currentBuyers = this.tokenEarlyBuyers.get(mint);
+      if (
+        currentBuyers &&
+        currentBuyers.length > buyerCountAtStart &&
+        !this.passedTokens.has(mint) &&
+        this.tokenData.has(mint)
+      ) {
+        const ageMinutes = (Date.now() - (this.tokenData.get(mint)?.timestamp || Date.now())) / 60000;
+        const maxAge = this._getMaxAgeMinutes();
+        if (ageMinutes < maxAge) {
+          logger.info(`🔄 ${tokenData.symbol}: ${currentBuyers.length - buyerCountAtStart} buyer(s) mới đến trong lúc phân tích (${buyerCountAtStart}→${currentBuyers.length}). Re-queue ngay.`);
+          this.processingTokens.add(mint);
+          if (!this._analysisQueue) this._analysisQueue = [];
+          if (!this._analysisQueue.includes(mint)) {
+            this._analysisQueue.push(mint);
+          }
+          this._processAnalysisQueue();
+        }
+      }
+
       // Cleanup old token data (keep last 100)
       this._cleanup();
     }

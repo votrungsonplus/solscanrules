@@ -1,5 +1,5 @@
 const { PublicKey } = require('@solana/web3.js');
-const { SolanaConnection: solana } = require('../core/solana-connection');
+const { SolanaConnection: solana, RPC_CATEGORY } = require('../core/solana-connection');
 const logger = require('../utils/logger');
 const { retry, shortenAddress } = require('../utils/helpers');
 
@@ -43,8 +43,8 @@ class DevAnalyzer {
 
     // Parallel RPC calls
     const [balance, signatures] = await Promise.all([
-      retry(() => solana.executeRace(conn => conn.getBalance(pubkey))),
-      retry(() => solana.executeRace(conn => conn.getSignaturesForAddress(pubkey, { limit: 50 }))),
+      retry(() => solana.execute(conn => conn.getBalance(pubkey), RPC_CATEGORY.ANALYSIS)),
+      retry(() => solana.execute(conn => conn.getSignaturesForAddress(pubkey, { limit: 50 }), RPC_CATEGORY.ANALYSIS)),
     ]);
 
     // Parse a sample of recent transactions to identify PumpFun creates and sells
@@ -87,8 +87,9 @@ class DevAnalyzer {
     const sigsToFetch = signatures.slice(0, 15).map(s => s.signature);
     let parsedTxs = [];
     try {
-      parsedTxs = await retry(() => solana.executeRace(conn =>
-        conn.getParsedTransactions(sigsToFetch, { maxSupportedTransactionVersion: 0 })
+      parsedTxs = await retry(() => solana.execute(conn =>
+        conn.getParsedTransactions(sigsToFetch, { maxSupportedTransactionVersion: 0 }),
+        RPC_CATEGORY.ANALYSIS
       ));
     } catch (err) {
       logger.debug(`Failed to fetch parsed txs for deployer: ${err.message}`);

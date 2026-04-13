@@ -1,5 +1,5 @@
 const { PublicKey } = require('@solana/web3.js');
-const { SolanaConnection: solana } = require('../core/solana-connection');
+const { SolanaConnection: solana, RPC_CATEGORY } = require('../core/solana-connection');
 const logger = require('../utils/logger');
 const { lamportsToSol, retry, shortenAddress } = require('../utils/helpers');
 
@@ -159,7 +159,10 @@ class WalletAnalyzer {
     const localBalances = new Map();
     try {
       const pubkeys = walletAddresses.map((a) => new PublicKey(a));
-      const accountsBatch = await solana.execute((conn) => conn.getMultipleAccountsInfo(pubkeys));
+      const accountsBatch = await solana.execute(
+        (conn) => conn.getMultipleAccountsInfo(pubkeys),
+        RPC_CATEGORY.ANALYSIS
+      );
       walletAddresses.forEach((addr, i) => {
         const acc = accountsBatch?.[i];
         localBalances.set(addr, acc ? acc.lamports : 0);
@@ -256,11 +259,11 @@ class WalletAnalyzer {
   }
 
   async _getBalance(pubkey) {
-    return retry(() => solana.execute((conn) => conn.getBalance(pubkey)));
+    return retry(() => solana.execute((conn) => conn.getBalance(pubkey), RPC_CATEGORY.ANALYSIS));
   }
 
   async _getSignatures(pubkey, limit) {
-    return retry(() => solana.execute((conn) => conn.getSignaturesForAddress(pubkey, { limit })));
+    return retry(() => solana.execute((conn) => conn.getSignaturesForAddress(pubkey, { limit }), RPC_CATEGORY.ANALYSIS));
   }
 
   async _getTransactionsFromSigs(signaturesArray) {
@@ -273,7 +276,8 @@ class WalletAnalyzer {
         batch.map((sig) =>
           retry(() =>
             solana.execute((conn) =>
-              conn.getParsedTransaction(sig.signature, { maxSupportedTransactionVersion: 0 })
+              conn.getParsedTransaction(sig.signature, { maxSupportedTransactionVersion: 0 }),
+              RPC_CATEGORY.ANALYSIS
             )
           )
         )

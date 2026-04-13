@@ -106,12 +106,23 @@ class SolanaConnection {
       this._categoryIndices[RPC_CATEGORY.ANALYSIS] = [1];
       this._categoryIndices[RPC_CATEGORY.METADATA] = [1];
       this._categoryIndices[RPC_CATEGORY.GENERAL] = [0, 1];
+    } else if (count >= 5) {
+      // 5+ RPCs: Extra endpoints dedicated to wallet analysis
+      this._categoryIndices[RPC_CATEGORY.DETECTION] = [0];
+      this._categoryIndices[RPC_CATEGORY.TRADING] = [0];
+      const analysisIndices = [1, 4]; // Alchemy + Helius #5
+      if (count >= 6) analysisIndices.push(5); // Helius #6
+      this._categoryIndices[RPC_CATEGORY.ANALYSIS] = analysisIndices;
+      this._categoryIndices[RPC_CATEGORY.METADATA] = [2];
+      const allIndices = Array.from({ length: count }, (_, i) => i);
+      this._categoryIndices[RPC_CATEGORY.GENERAL] = allIndices;
+      logger.info(`📡 ${count} RPCs detected: ANALYSIS category uses ${analysisIndices.length} endpoints for max wallet scanning speed`);
     } else if (count >= 4) {
       this._categoryIndices[RPC_CATEGORY.DETECTION] = [0];
       this._categoryIndices[RPC_CATEGORY.TRADING] = [0];
       this._categoryIndices[RPC_CATEGORY.ANALYSIS] = [1];
       this._categoryIndices[RPC_CATEGORY.METADATA] = [2];
-      this._categoryIndices[RPC_CATEGORY.GENERAL] = [0, 1, 2, 3]; // Phân bổ đều cho các RPC thay vì chỉ RPC #4
+      this._categoryIndices[RPC_CATEGORY.GENERAL] = [0, 1, 2, 3];
     } else {
       // 3 RPCs
       this._categoryIndices[RPC_CATEGORY.DETECTION] = [0];
