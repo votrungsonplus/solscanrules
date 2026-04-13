@@ -1439,7 +1439,10 @@ class Orchestrator extends EventEmitter {
         }
         return text;
       }
-
+      case 'pnl': {
+        const stats = tracker.getTodayStats();
+        const wr = tracker.getWinRateStats();
+        const fmtWr = (d) => d && d.total > 0 ? `${d.winRate.toFixed(1)}% (${d.wins}W/${d.losses}L)${d.avgPnlPercent !== undefined ? ` | PnL: ${d.avgPnlPercent >= 0 ? '+' : ''}${d.avgPnlPercent.toFixed(1)}%` : ''}` : 'N/A';
         return (
           `*📈 Lãi/lỗ hôm nay*\n\n` +
           `Tổng: ${stats.totalPnlSol >= 0 ? '+' : ''}${formatSol(stats.totalPnlSol)}\n` +
