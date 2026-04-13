@@ -411,6 +411,10 @@ class TelegramBot {
         });
       } catch (err) {
         logger.error(`Telegram alert error to ${chatId}: ${err.message}`);
+        logger.error(err.stack); // Bơm stack trace rõ ràng
+        if (err.response && err.response.description) {
+          logger.error(`Telegram API Error: ${err.response.description}`);
+        }
       }
     }
   }

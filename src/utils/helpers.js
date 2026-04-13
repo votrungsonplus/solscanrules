@@ -44,6 +44,7 @@ async function retry(fn, maxRetries = 3, baseDelay = 500) {
  * Shorten a Solana address for display
  */
 function shortenAddress(address, chars = 4) {
+  if (!address) return 'Unknown';
   return `${address.slice(0, chars)}...${address.slice(-chars)}`;
 }
 
