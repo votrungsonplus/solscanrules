@@ -1230,7 +1230,7 @@ class Orchestrator extends EventEmitter {
         if (!this.passedTokens.has(mint) && ageMinutes < maxAge) {
           this._scheduleRecheck(
             mint,
-            ruleResult.onlyRetryableFailed ? 5000 : 8000,
+            5000,
             ruleResult.onlyRetryableFailed
               ? 'chỉ còn điều kiện retryable chưa đạt'
               : 'chưa đạt điều kiện nhưng vẫn còn trong tuổi cho phép'
