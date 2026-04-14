@@ -1473,16 +1473,16 @@ socket.on('rulesList', (rules) => {
     rulesContainer.innerHTML = '';
 
     const paramLabels = {
-        tolerancePercent: 'Tolerance %',
-        minGlobalFee: 'Min Fee SOL',
-        maxPercent: 'Max %',
-        minVol: 'Min Vol',
-        maxMinutes: 'Max Min',
-        minMarketCapSol: 'Min MC',
-        maxRiskScore: 'Max Risk',
-        minScore: 'Min Score',
-        maxProgressPercent: 'Max Prog %',
-        maxFreshCount: 'Max Fresh',
+        tolerancePercent: 'Do lech (%)',
+        minGlobalFee: `${renderTerm('Global Fee', 'globalFee')} toi thieu (SOL)`,
+        maxPercent: 'Toi da (%)',
+        minVol: `${renderTerm('Volume', 'volume')} toi thieu`,
+        maxMinutes: 'Phut toi da',
+        minMarketCapSol: `${renderTerm('MC', 'marketCap')} toi thieu`,
+        maxRiskScore: `${renderTerm('Risk Score', 'riskScore')} toi da`,
+        minScore: 'Diem toi thieu',
+        maxProgressPercent: `${renderTerm('Bonding Curve', 'bondingCurve')} toi da (%)`,
+        maxFreshCount: 'So vi moi toi da',
     };
 
     for (const rule of rules) {
