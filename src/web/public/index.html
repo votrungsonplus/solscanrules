@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SCAN SOL BOT - Command Center</title>
+    <title>SCAN SOL BOT - Trung tâm điều khiển</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <link rel="stylesheet" href="css/style.css">
@@ -15,7 +15,7 @@
             <div class="logo">
                 <div class="logo-icon"><i class="fas fa-satellite-dish"></i></div>
                 <span class="logo-text">SCAN SOL BOT</span>
-                <span class="status-dot" id="connectionStatus" title="Connection Status"></span>
+                <span class="status-dot" id="connectionStatus" title="Trạng thái kết nối"></span>
             </div>
             <div class="auto-reload-control">
                 <label for="autoReloadSelect">Tự tải lại</label>
@@ -36,47 +36,47 @@
                 </div>
                 <div class="stat-chip">
                     <i class="fas fa-search"></i>
-                    <span>Scanned</span>
+                    <span>Đã quét</span>
                     <strong id="totalScanned">0</strong>
                 </div>
                 <div class="stat-chip pass">
                     <i class="fas fa-check-circle"></i>
-                    <span>Passed</span>
+                    <span>Qua lọc</span>
                     <strong id="totalPassed">0</strong>
                 </div>
                 <div class="stat-chip">
                     <i class="fas fa-shopping-cart"></i>
-                    <span>Bought</span>
+                    <span>Đã mua</span>
                     <strong id="totalBought">0</strong>
                 </div>
                 <div class="stat-chip pnl" id="pnlChip">
                     <i class="fas fa-chart-line"></i>
-                    <span>PnL</span>
+                    <span><span class="term-en" data-tooltip="Profit & Loss — Lợi/Lỗ tổng trong ngày">PnL</span></span>
                     <strong id="dailyPnl">0 SOL</strong>
                 </div>
-                <div class="stat-chip winrate" id="winrate1d" title="Win rate Today (since 9 AM) | ≥x1.1 = Win, ≤x1.0 = Loss">
+                <div class="stat-chip winrate" id="winrate1d" title="Tỉ lệ thắng Hôm Nay (từ 9h sáng) | ≥x1.1 = Thắng, ≤x1.0 = Thua">
                     <i class="fas fa-percentage"></i>
-                    <span>Win Today</span>
+                    <span>Thắng Hôm Nay</span>
                     <strong>--%</strong>
                 </div>
-                <div class="stat-chip winrate" id="winrate3d" title="Win rate 3 Days">
+                <div class="stat-chip winrate" id="winrate3d" title="Tỉ lệ thắng 3 Ngày">
                     <i class="fas fa-percentage"></i>
-                    <span>Win 3D</span>
+                    <span>Thắng 3 Ngày</span>
                     <strong>--%</strong>
                 </div>
-                <div class="stat-chip winrate" id="winrate7d" title="Win rate 7 Days">
+                <div class="stat-chip winrate" id="winrate7d" title="Tỉ lệ thắng 7 Ngày">
                     <i class="fas fa-percentage"></i>
-                    <span>Win 7D</span>
+                    <span>Thắng 7 Ngày</span>
                     <strong>--%</strong>
                 </div>
-                <div class="stat-chip winrate" id="winrateall" title="Total Win rate (All Time)">
+                <div class="stat-chip winrate" id="winrateall" title="Tỉ lệ thắng Toàn thời gian">
                     <i class="fas fa-percentage"></i>
-                    <span>Win ALL</span>
+                    <span>Thắng Tất cả</span>
                     <strong>--%</strong>
                 </div>
                 <div class="stat-chip">
                     <i class="fas fa-clock"></i>
-                    <span>Uptime</span>
+                    <span>Hoạt động</span>
                     <strong id="uptime">00:00</strong>
                 </div>
             </div>
@@ -88,37 +88,37 @@
             <!-- ====== COLUMN 1: TOKEN FEED ====== -->
             <section class="panel col-feed">
                 <div class="panel-header">
-                    <h2><i class="fas fa-stream"></i> Token Feed</h2>
+                    <h2><i class="fas fa-stream"></i> Luồng Token</h2>
                     <div class="feed-counter" id="feedCounter">0</div>
                 </div>
                 <!-- Search -->
                 <div class="search-bar">
-                    <input type="text" id="contractSearch" placeholder="Paste contract address...">
+                    <input type="text" id="contractSearch" placeholder="Dán địa chỉ contract...">
                     <button id="searchBtn"><i class="fas fa-search"></i></button>
                 </div>
                 <!-- Filter tabs -->
                 <div class="feed-tabs">
-                    <button class="tab active" data-filter="all">All</button>
-                    <button class="tab" data-filter="pending">Pending</button>
-                    <button class="tab" data-filter="pass">Pass</button>
-                    <button class="tab" data-filter="fail">Fail</button>
+                    <button class="tab active" data-filter="all">Tất cả</button>
+                    <button class="tab" data-filter="pending">Đang xử lý</button>
+                    <button class="tab" data-filter="pass">Đạt</button>
+                    <button class="tab" data-filter="fail">Loại</button>
                 </div>
                 <!-- Token list -->
                 <div class="feed-list" id="tokenFeed">
-                    <div class="placeholder-text"><i class="fas fa-satellite-dish"></i><br>Listening for new tokens...</div>
+                    <div class="placeholder-text"><i class="fas fa-satellite-dish"></i><br>Đang chờ token mới...</div>
                 </div>
             </section>
 
             <!-- ====== COLUMN 2: ANALYSIS DETAIL ====== -->
             <section class="panel col-analysis">
                 <div class="panel-header">
-                    <h2><i class="fas fa-microscope"></i> Analysis Detail</h2>
+                    <h2><i class="fas fa-microscope"></i> Chi tiết phân tích</h2>
                     <span class="analysis-timer" id="analysisTimer"></span>
                 </div>
                 <div id="liveAnalysis" class="analysis-content">
                     <div class="empty-state">
                         <div class="empty-icon"><i class="fas fa-crosshairs"></i></div>
-                        <p>Select a token from the feed or wait for new analysis</p>
+                        <p>Chọn token từ luồng hoặc chờ phân tích mới</p>
                     </div>
                 </div>
             </section>
@@ -128,35 +128,35 @@
                 <!-- Tab navigation -->
                 <div class="control-tabs">
                     <button class="ctrl-tab active" data-panel="passed">
-                        <i class="fas fa-trophy"></i> Passed History
+                        <i class="fas fa-trophy"></i> Đã qua lọc
                     </button>
                     <button class="ctrl-tab" data-panel="top10">
                         <i class="fas fa-crown"></i> Top 10
                     </button>
                     <button class="ctrl-tab" data-panel="history">
-                        <i class="fas fa-history"></i> History
+                        <i class="fas fa-history"></i> Lịch sử
                     </button>
                     <button class="ctrl-tab" data-panel="sniper">
-                        <i class="fas fa-bolt"></i> Sniper
+                        <i class="fas fa-bolt"></i> <span class="term-en" data-tooltip="Mua/bán thủ công tức thì theo địa chỉ mint">Sniper</span>
                     </button>
                     <button class="ctrl-tab" data-panel="positions">
-                        <i class="fas fa-satellite-dish"></i> Positions
+                        <i class="fas fa-satellite-dish"></i> Đang nắm
                     </button>
                     <button class="ctrl-tab" data-panel="settings">
-                        <i class="fas fa-cog"></i> Settings
+                        <i class="fas fa-cog"></i> Cài đặt
                     </button>
                 </div>
 
                 <!-- Panel: Passed Tokens 24h -->
                 <div class="ctrl-panel active" id="panel-passed">
                     <div class="panel-actions">
-                        <button id="refreshPassedBtn" class="action-btn-sm" title="Refresh PnL from DexScreener">
-                            <i class="fas fa-sync-alt"></i> Refresh PnL
+                        <button id="refreshPassedBtn" class="action-btn-sm" title="Cập nhật PnL từ DexScreener">
+                            <i class="fas fa-sync-alt"></i> Cập nhật <span class="term-en" data-tooltip="Profit & Loss — Lợi/Lỗ tổng">PnL</span>
                         </button>
                         <span id="refreshStatusMsg" class="refresh-status-msg"></span>
                     </div>
                     <div class="passed-list" id="passedTokensContainer">
-                        <div class="placeholder-text">No passed tokens in history</div>
+                        <div class="placeholder-text">Chưa có token qua lọc</div>
                     </div>
                 </div>
 
@@ -167,36 +167,36 @@
                         <button class="period-btn" data-period="all">Toàn Thời Gian</button>
                     </div>
                     <div class="top10-list" id="top10Container">
-                        <div class="placeholder-text">Not enough data to calculate top 10</div>
+                        <div class="placeholder-text">Chưa đủ dữ liệu để tính Top 10</div>
                     </div>
                 </div>
 
                 <!-- Panel: Trade History -->
                 <div class="ctrl-panel" id="panel-history">
                     <div class="trade-list" id="tradeHistoryContainer">
-                        <div class="placeholder-text">No trades yet</div>
+                        <div class="placeholder-text">Chưa có lệnh nào</div>
                     </div>
                 </div>
 
                 <!-- Panel: Quick Snipe (Manual Swap) -->
                 <div class="ctrl-panel" id="panel-sniper">
                     <div class="sniper-container">
-                        <h3><i class="fas fa-crosshairs"></i> Fast Manual Execution</h3>
-                        <p class="sniper-desc">Force buy or sell any token via PumpPortal or Jupiter V6.</p>
-                        
+                        <h3><i class="fas fa-crosshairs"></i> Thực thi thủ công nhanh</h3>
+                        <p class="sniper-desc">Mua/bán ngay bất kỳ token nào qua PumpPortal hoặc Jupiter V6.</p>
+
                         <div class="sniper-input-group">
-                            <label>Token Contract Address (Mint)</label>
-                            <input type="text" id="sniperMintInput" placeholder="Paste Base58 Mint Address...">
+                            <label>Địa chỉ contract (<span class="term-en" data-tooltip="Địa chỉ hợp đồng token trên blockchain Solana">Mint</span>)</label>
+                            <input type="text" id="sniperMintInput" placeholder="Dán địa chỉ Mint Base58...">
                         </div>
-                        
+
                         <div class="sniper-input-group">
-                            <label>Amount</label>
-                            <input type="number" id="sniperAmountInput" step="0.01" min="0" placeholder="e.g. 0.1 (SOL for Buy, % for Sell)">
+                            <label>Số lượng</label>
+                            <input type="number" id="sniperAmountInput" step="0.01" min="0" placeholder="VD: 0.1 (SOL để mua, % để bán)">
                         </div>
 
                         <div class="sniper-action-btns">
-                            <button id="btnSniperBuy" class="btn-snipe buy"><i class="fas fa-rocket"></i> FORCE BUY (SOL)</button>
-                            <button id="btnSniperSell" class="btn-snipe sell"><i class="fas fa-bomb"></i> FORCE SELL (%)</button>
+                            <button id="btnSniperBuy" class="btn-snipe buy"><i class="fas fa-rocket"></i> MUA NGAY (SOL)</button>
+                            <button id="btnSniperSell" class="btn-snipe sell"><i class="fas fa-bomb"></i> BÁN NGAY (%)</button>
                         </div>
 
                         <div id="sniperStatusLog" class="sniper-log"></div>
@@ -211,7 +211,7 @@
                             <p class="sniper-desc">Những token Bot đang nắm giữ chờ chốt lời hoặc cắt lỗ.</p>
                         </div>
                         <button id="btnSyncPositions" class="btn-refresh" title="Đồng bộ với số dư ví thực tế">
-                            <i class="fas fa-sync-alt"></i> Sync Wallet
+                            <i class="fas fa-sync-alt"></i> Đồng bộ Ví
                         </button>
                     </div>
                     <div class="trade-list" id="positionsContainer">
@@ -224,63 +224,63 @@
                     <div class="settings-content">
                         <!-- REAL TRADING -->
                         <div class="config-section trading-section">
-                            <h3><i class="fas fa-wallet"></i> Real Trading</h3>
+                            <h3><i class="fas fa-wallet"></i> Giao dịch thật</h3>
                             <div class="wallet-info" id="walletInfoBar">
                                 <div class="wallet-balance-row">
-                                    <span class="wallet-label"><i class="fas fa-money-bill-wave"></i> Balance</span>
+                                    <span class="wallet-label"><i class="fas fa-money-bill-wave"></i> Số dư</span>
                                     <strong class="wallet-balance-value" id="walletBalanceDisplay">--- SOL</strong>
-                                    <button id="refreshBalanceBtn" class="action-btn-xs" title="Refresh Balance"><i class="fas fa-sync-alt"></i></button>
+                                    <button id="refreshBalanceBtn" class="action-btn-xs" title="Làm mới số dư"><i class="fas fa-sync-alt"></i></button>
                                 </div>
                                 <div class="wallet-address-row">
-                                    <span class="wallet-label"><i class="fas fa-key"></i> Wallet</span>
-                                    <code class="wallet-addr" id="walletAddressDisplay">Not configured</code>
+                                    <span class="wallet-label"><i class="fas fa-key"></i> Ví</span>
+                                    <code class="wallet-addr" id="walletAddressDisplay">Chưa cấu hình</code>
                                 </div>
                             </div>
                             <div class="config-grid">
                                 <div class="config-item highlight-buy">
-                                    <label>🛒 Auto-Buy <i class="fas fa-question-circle help-icon" title="Bật/Tắt tự động mua khi token vượt qua bộ lọc rules"></i></label>
+                                    <label>🛒 <span class="term-en" data-tooltip="Tự động mua khi token vượt qua bộ lọc rules">Auto-Buy</span> <i class="fas fa-question-circle help-icon" title="Bật/Tắt tự động mua khi token vượt qua bộ lọc rules"></i></label>
                                     <label class="switch">
                                         <input type="checkbox" id="autoBuyToggle">
                                         <span class="slider"></span>
                                     </label>
                                 </div>
                                 <div class="config-item highlight-sell">
-                                    <label>🔄 Auto-Sell <i class="fas fa-question-circle help-icon" title="Bật/Tắt tự động bán khi chạm TP/SL hoặc phát hiện Rug"></i></label>
+                                    <label>🔄 <span class="term-en" data-tooltip="Tự động bán khi chạm TP/SL hoặc phát hiện Rug">Auto-Sell</span> <i class="fas fa-question-circle help-icon" title="Bật/Tắt tự động bán khi chạm TP/SL hoặc phát hiện Rug"></i></label>
                                     <label class="switch">
                                         <input type="checkbox" id="autoSellToggle">
                                         <span class="slider"></span>
                                     </label>
                                 </div>
                                 <div class="config-item">
-                                    <label>Buy Amount (SOL) <i class="fas fa-question-circle help-icon" title="Số lượng SOL chi ra cho mỗi lệnh mua tự động"></i></label>
+                                    <label>Số SOL mỗi lệnh <i class="fas fa-question-circle help-icon" title="Số lượng SOL chi ra cho mỗi lệnh mua tự động"></i></label>
                                     <input type="number" id="buyAmountInput" step="0.01" min="0.01" class="config-input">
                                 </div>
                                 <div class="config-item">
-                                    <label>Buy Slippage (%) <i class="fas fa-question-circle help-icon" title="% Trượt giá tối đa chấp nhận khi mua (Nên để 15-25% để land nhanh)"></i></label>
+                                    <label><span class="term-en" data-tooltip="Trượt giá cho phép khi khớp lệnh mua (nên để 15–25%)">Slippage</span> mua (%) <i class="fas fa-question-circle help-icon" title="% Trượt giá tối đa chấp nhận khi mua (Nên để 15-25% để land nhanh)"></i></label>
                                     <input type="number" id="buySlippageInput" step="1" min="1" max="100" class="config-input">
                                 </div>
                                 <div class="config-item">
-                                    <label>Sell Slippage (%) <i class="fas fa-question-circle help-icon" title="% Trượt giá tối đa chấp nhận khi bán"></i></label>
+                                    <label><span class="term-en" data-tooltip="Trượt giá cho phép khi khớp lệnh bán">Slippage</span> bán (%) <i class="fas fa-question-circle help-icon" title="% Trượt giá tối đa chấp nhận khi bán"></i></label>
                                     <input type="number" id="sellSlippageInput" step="1" min="1" max="100" class="config-input">
                                 </div>
                                 <div class="config-item">
-                                    <label>Take Profit (%) <i class="fas fa-question-circle help-icon" title="Mục tiêu lợi nhuận (%) để tự động bán chốt lời"></i></label>
+                                    <label><span class="term-en" data-tooltip="Ngưỡng lợi nhuận để tự động chốt lời">Take Profit</span> (%) <i class="fas fa-question-circle help-icon" title="Mục tiêu lợi nhuận (%) để tự động bán chốt lời"></i></label>
                                     <input type="number" id="takeProfitInput" step="1" min="1" class="config-input">
                                 </div>
                                 <div class="config-item">
-                                    <label>Stop Loss (%) <i class="fas fa-question-circle help-icon" title="Ngưỡng lỗ tối đa (%) để tự động bán cắt lỗ"></i></label>
+                                    <label><span class="term-en" data-tooltip="Ngưỡng lỗ tối đa để tự động cắt lỗ">Stop Loss</span> (%) <i class="fas fa-question-circle help-icon" title="Ngưỡng lỗ tối đa (%) để tự động bán cắt lỗ"></i></label>
                                     <input type="number" id="stopLossInput" step="1" min="1" class="config-input">
                                 </div>
                                 <div class="config-item">
-                                    <label>Max Positions <i class="fas fa-question-circle help-icon" title="Số lượng kèo tối đa được giữ cùng lúc"></i></label>
+                                    <label>Vị thế tối đa <i class="fas fa-question-circle help-icon" title="Số lượng kèo tối đa được giữ cùng lúc"></i></label>
                                     <input type="number" id="maxPositionsInput" step="1" min="1" class="config-input">
                                 </div>
                                 <div class="config-item">
-                                    <label>Daily Loss Limit (SOL) <i class="fas fa-question-circle help-icon" title="Giới hạn lỗ tổng cộng trong ngày trước khi bot dừng trade"></i></label>
+                                    <label>Giới hạn lỗ/ngày (SOL) <i class="fas fa-question-circle help-icon" title="Giới hạn lỗ tổng cộng trong ngày trước khi bot dừng trade"></i></label>
                                     <input type="number" id="dailyLossInput" step="0.1" min="0" class="config-input">
                                 </div>
                                 <div class="config-item">
-                                    <label>Jito Bundle <i class="fas fa-question-circle help-icon" title="Sử dụng mạng Jito để tăng tốc độ land tx và chống Front-run"></i></label>
+                                    <label><span class="term-en" data-tooltip="Dùng mạng Jito để tăng tốc độ land tx và chống Front-run">Jito Bundle</span> <i class="fas fa-question-circle help-icon" title="Sử dụng mạng Jito để tăng tốc độ land tx và chống Front-run"></i></label>
                                     <span class="config-badge" id="jitoStatus">--</span>
                                 </div>
                             </div>
@@ -288,18 +288,18 @@
 
                         <!-- Monitoring Config -->
                         <div class="config-section">
-                            <h3><i class="fas fa-binoculars"></i> Monitoring Config</h3>
+                            <h3><i class="fas fa-binoculars"></i> Cấu hình theo dõi</h3>
                             <div class="config-grid">
                                 <div class="config-item">
-                                    <label>Early Buyers (View)</label>
+                                    <label><span class="term-en" data-tooltip="Ví mua trong các giao dịch đầu tiên của token">Early Buyers</span> (Hiện)</label>
                                     <input type="number" id="earlyBuyersInput" step="1" min="1" max="20" class="config-input">
                                 </div>
                                 <div class="config-item">
-                                    <label>Min Buyers to Pass</label>
+                                    <label>Số buyer tối thiểu để Pass</label>
                                     <input type="number" id="minBuyersToPassInput" step="1" min="1" max="20" class="config-input">
                                 </div>
                                 <div class="config-item">
-                                    <label>Show All Buyers (Inc. Dev)</label>
+                                    <label>Hiện tất cả buyer (kể Dev)</label>
                                     <label class="switch">
                                         <input type="checkbox" id="showAllBuyersToggle">
                                         <span class="slider"></span>
@@ -310,20 +310,20 @@
 
                         <!-- Rule Profiles -->
                         <div class="config-section">
-                            <h3><i class="fas fa-layer-group"></i> Strategy Profile</h3>
+                            <h3><i class="fas fa-layer-group"></i> Bộ lọc chiến lược</h3>
                             <div class="profile-card">
                                 <div class="profile-card-head">
                                     <div>
-                                        <div class="profile-label">Active Profile</div>
+                                        <div class="profile-label">Đang dùng</div>
                                         <div class="profile-name-row">
-                                            <strong id="activeRuleProfileName">Loading...</strong>
+                                            <strong id="activeRuleProfileName">Đang tải...</strong>
                                             <span id="activeRuleProfileBadge" class="config-badge">--</span>
                                         </div>
                                     </div>
-                                    <div id="activeRuleProfileHint" class="profile-hint">Preset chiến lược đang áp dụng cho Rules Engine.</div>
+                                    <div id="activeRuleProfileHint" class="profile-hint">Preset chiến lược đang áp dụng cho Bộ quy tắc.</div>
                                 </div>
                                 <div class="profile-actions" id="ruleProfilesContainer">
-                                    <div class="placeholder-text">Loading profiles...</div>
+                                    <div class="placeholder-text">Đang tải...</div>
                                 </div>
                             </div>
                         </div>
@@ -331,11 +331,11 @@
                         <!-- Rules -->
                         <div class="config-section">
                             <div class="config-header-row">
-                                <h3><i class="fas fa-shield-alt"></i> Rules Engine</h3>
+                                <h3><i class="fas fa-shield-alt"></i> Bộ quy tắc</h3>
                                 <div class="sync-controls">
                                     <span id="syncStatus" class="sync-status-badge"></span>
                                     <button id="syncConfigBtn" class="sync-action-btn" title="Ghi đè tất cả cài đặt hiện tại vào hệ thống và Database">
-                                        <i class="fas fa-save"></i> Sync Config
+                                        <i class="fas fa-save"></i> Lưu cài đặt
                                     </button>
                                 </div>
                             </div>
@@ -348,6 +348,6 @@
     </div>
 
     <script src="/socket.io/socket.io.js"></script>
-    <script src="js/app.js?v=5"></script>
+    <script src="js/app.js?v=6"></script>
 </body>
 </html>

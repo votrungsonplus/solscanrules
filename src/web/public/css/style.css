@@ -1815,6 +1815,62 @@ input:checked + .slider::before { transform: translateX(18px); }
     border-color: rgba(0, 243, 255, 0.3);
 }
 
+/* ═══════════════════════════════════════
+   THUẬT NGỮ TRADING - TOOLTIP ANNOTATION
+   Giữ nguyên tiếng Anh + phụ chú khi hover
+   ═══════════════════════════════════════ */
+.term-en {
+    border-bottom: 1px dashed rgba(148, 163, 184, 0.5);
+    cursor: help;
+    position: relative;
+    white-space: nowrap;
+}
+
+.term-en::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: calc(100% + 6px);
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(15, 23, 42, 0.97);
+    color: var(--text-primary);
+    font-size: 11px;
+    font-weight: 400;
+    line-height: 1.5;
+    padding: 6px 10px;
+    border-radius: var(--radius-sm);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    white-space: nowrap;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+    z-index: 9999;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+}
+
+.term-en:hover::after {
+    opacity: 1;
+}
+
+/* Tooltip mũi tên nhỏ */
+.term-en::before {
+    content: '';
+    position: absolute;
+    bottom: calc(100% + 1px);
+    left: 50%;
+    transform: translateX(-50%);
+    border: 4px solid transparent;
+    border-top-color: rgba(255, 255, 255, 0.12);
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+    z-index: 9999;
+}
+
+.term-en:hover::before {
+    opacity: 1;
+}
+
 /* Period Toggle for Top 10 */
 .period-toggle {
     display: flex;

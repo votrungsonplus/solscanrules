@@ -94,7 +94,7 @@ function updateAutoReloadCountdown() {
     if (!autoReloadCountdown) return;
 
     if (autoReloadSeconds === 0) {
-        autoReloadCountdown.textContent = 'OFF';
+        autoReloadCountdown.textContent = 'TẮT';
         autoReloadCountdown.classList.add('disabled');
         return;
     }
@@ -102,7 +102,7 @@ function updateAutoReloadCountdown() {
     autoReloadCountdown.classList.remove('disabled');
 
     if (document.hidden) {
-        autoReloadCountdown.textContent = 'Pause';
+        autoReloadCountdown.textContent = 'Dừng';
         return;
     }
 
@@ -509,16 +509,16 @@ function manualRefresh(mint) {
     btn.disabled = true;
     const icon = btn.querySelector('i');
     if (icon) icon.classList.add('spinning');
-    btn.querySelector('span').textContent = 'Refreshing...';
+    btn.querySelector('span').textContent = 'Đang làm mới...';
 
     socket.emit('manualRefresh', mint);
-    
+
     // Safety timeout to reset button if no response
     setTimeout(() => {
         if (btn.disabled) {
             btn.disabled = false;
             if (icon) icon.classList.remove('spinning');
-            btn.querySelector('span').textContent = 'Update Status';
+            btn.querySelector('span').textContent = 'Cập nhật trạng thái';
         }
     }, 10000);
 }
@@ -578,10 +578,10 @@ socket.on('refreshPassedTokenInfoStatus', (data) => {
     const icon = btn.querySelector('i');
     if (icon) icon.classList.remove('spinning');
     const label = btn.querySelector('span');
-    if (label) label.textContent = 'Update Status';
-    
+    if (label) label.textContent = 'Cập nhật trạng thái';
+
     if (!data.success) {
-        alert('Update Status failed: ' + data.message);
+        alert('Cập nhật thất bại: ' + data.message);
     }
 });
 
@@ -756,33 +756,33 @@ function renderAnalysis(data) {
             <div class="info-only-actions">
                 <button class="refresh-btn" id="refreshPassedInfoBtn" onclick="refreshPassedTokenInfo('${mint}')">
                     <i class="fas fa-rotate"></i>
-                    <span>Update Status</span>
+                    <span>Cập nhật trạng thái</span>
                 </button>
             </div>
             <div class="info-grid">
                 <div class="info-card">
-                    <h4><i class="fas fa-coins"></i> Market Snapshot</h4>
-                    <div class="info-row"><span class="label">Launch MC</span><span class="val">${launchMcapUsd > 0 ? '$' + formatNumber(launchMcapUsd) : '---'}</span></div>
-                    <div class="info-row"><span class="label">Current MC</span><span class="val yellow">${currentMcapUsd > 0 ? '$' + formatNumber(currentMcapUsd) : '---'}</span></div>
-                    <div class="info-row"><span class="label">Highest MC</span><span class="val green">${highestMcapUsd > 0 ? '$' + formatNumber(highestMcapUsd) : '---'}</span></div>
-                    <div class="info-row"><span class="label">Performance</span><span class="val ${performancePct >= 0 ? 'green' : 'red'}">${performancePct >= 0 ? '+' : ''}${performancePct.toFixed(1)}%</span></div>
+                    <h4><i class="fas fa-coins"></i> Ảnh chụp thị trường</h4>
+                    <div class="info-row"><span class="label">MC khi pass</span><span class="val">${launchMcapUsd > 0 ? '$' + formatNumber(launchMcapUsd) : '---'}</span></div>
+                    <div class="info-row"><span class="label">MC hiện tại</span><span class="val yellow">${currentMcapUsd > 0 ? '$' + formatNumber(currentMcapUsd) : '---'}</span></div>
+                    <div class="info-row"><span class="label">MC cao nhất</span><span class="val green">${highestMcapUsd > 0 ? '$' + formatNumber(highestMcapUsd) : '---'}</span></div>
+                    <div class="info-row"><span class="label">Hiệu suất</span><span class="val ${performancePct >= 0 ? 'green' : 'red'}">${performancePct >= 0 ? '+' : ''}${performancePct.toFixed(1)}%</span></div>
                 </div>
                 <div class="info-card">
-                    <h4><i class="fas fa-wave-square"></i> Live Data</h4>
+                    <h4><i class="fas fa-wave-square"></i> Dữ liệu thực</h4>
                     <div class="info-row"><span class="label">Volume (24h)</span><span class="val highlight-val">${tokenData.volume > 0 ? tokenData.volume.toFixed(1) + ' SOL' : '---'}</span></div>
-                    <div class="info-row"><span class="label">Global Fee</span><span class="val highlight-val yellow">${tokenData.globalFee > 0 ? tokenData.globalFee.toFixed(4) + ' SOL' : '---'}</span></div>
-                    <div class="info-row"><span class="label">Holders</span><span class="val highlight-val green">${holderStats?.realHolderCount || '---'}</span></div>
-                    <div class="info-row"><span class="label">Refreshed At</span><span class="val">${refreshedAt}</span></div>
+                    <div class="info-row"><span class="label"><span class="term-en" data-tooltip="Tổng phí giao dịch = Volume × 1%">Global Fee</span></span><span class="val highlight-val yellow">${tokenData.globalFee > 0 ? tokenData.globalFee.toFixed(4) + ' SOL' : '---'}</span></div>
+                    <div class="info-row"><span class="label">Holder</span><span class="val highlight-val green">${holderStats?.realHolderCount || '---'}</span></div>
+                    <div class="info-row"><span class="label">Cập nhật lúc</span><span class="val">${refreshedAt}</span></div>
                 </div>
                 <div class="info-card">
-                    <h4><i class="fas fa-clock"></i> Timeline</h4>
-                    <div class="info-row"><span class="label">Passed At</span><span class="val">${passedAt}</span></div>
-                    <div class="info-row"><span class="label">Highest At</span><span class="val">${highestAt}</span></div>
-                    <div class="info-row"><span class="label">Deployer</span><span class="val" style="font-size: 10px;">${deployer || '---'}</span></div>
+                    <h4><i class="fas fa-clock"></i> Dòng thời gian</h4>
+                    <div class="info-row"><span class="label">Qua lọc lúc</span><span class="val">${passedAt}</span></div>
+                    <div class="info-row"><span class="label"><span class="term-en" data-tooltip="Thời điểm đạt vốn hóa cao nhất">ATH</span> lúc</span><span class="val">${highestAt}</span></div>
+                    <div class="info-row"><span class="label">Người tạo</span><span class="val" style="font-size: 10px;">${deployer || '---'}</span></div>
                 </div>
             </div>
             <div style="font-size: 10px; color: var(--text-muted); text-align: right; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border);">
-                Info-only view for passed token
+                Xem thông tin token đã qua lọc
             </div>
         `;
 
@@ -796,7 +796,7 @@ function renderAnalysis(data) {
         html += `
             <div class="progress-bar-container">
                 <div class="progress-label">
-                    <span>Bonding Curve</span>
+                    <span><span class="term-en" data-tooltip="Tiến độ đường cong giá trên pump.fun — 100% = token lên DEX">Bonding Curve</span></span>
                     <span>${bondingProgress.toFixed(1)}%</span>
                 </div>
                 <div class="progress-bar">
@@ -810,18 +810,18 @@ function renderAnalysis(data) {
     html += `
         <div class="verdict-box ${isPassed ? 'pass' : 'fail'}">
             <i class="fas ${isPassed ? 'fa-check-double' : 'fa-shield-alt'}"></i>
-            <span>${ruleResult.summary || (isPassed ? 'All rules passed' : 'Blocked by rules')}</span>
-            
+            <span>${ruleResult.summary || (isPassed ? 'Tất cả quy tắc đạt' : 'Bị chặn bởi quy tắc')}</span>
+
             <button class="refresh-btn" id="refreshBtn" onclick="manualRefresh('${mint}')">
                 <i class="fas fa-sync-alt"></i>
-                <span>Update Status</span>
+                <span>Cập nhật trạng thái</span>
             </button>
         </div>
     `;
 
     // ── Rule Results ──
     if (ruleResult.results && ruleResult.results.length > 0) {
-        html += `<div class="section-title"><i class="fas fa-list-check"></i> Rule Results (${ruleResult.results.filter(r => r.passed).length}/${ruleResult.results.length} passed)</div>`;
+        html += `<div class="section-title"><i class="fas fa-list-check"></i> Kết quả quy tắc (${ruleResult.results.filter(r => r.passed).length}/${ruleResult.results.length} đạt)</div>`;
         html += `<div class="rules-grid">`;
         for (const r of ruleResult.results) {
             const cls = r.passed ? 'pass' : (r.ruleType === 'INFO' ? 'info' : 'fail');
@@ -844,7 +844,7 @@ function renderAnalysis(data) {
         html += `
             <div style="padding: 20px; text-align: center; background: var(--bg-card); border-radius: var(--radius-md); border: 1px dashed var(--border); margin-bottom: 20px;">
                 <div style="font-size: 13px; color: var(--text-secondary); line-height: 1.6;">${ruleResult.summary}</div>
-                <div style="font-size: 11px; color: var(--text-muted); margin-top: 8px;">(Legacy scan - detailed rule data not available)</div>
+                <div style="font-size: 11px; color: var(--text-muted); margin-top: 8px;">(Quét cũ — không có dữ liệu quy tắc chi tiết)</div>
             </div>
         `;
     }
@@ -857,21 +857,21 @@ function renderAnalysis(data) {
         html += `<div class="info-grid">`;
 
         // Dev Analysis Card
-        html += `<div class="info-card"><h4><i class="fas fa-user-shield"></i> Dev Analysis</h4>`;
+        html += `<div class="info-card"><h4><i class="fas fa-user-shield"></i> Phân tích Dev</h4>`;
         if (devData.address) {
             const riskColor = devData.riskScore >= 70 ? 'red' : devData.riskScore >= 40 ? 'yellow' : 'green';
             html += `
-                <div class="info-row"><span class="label">Address</span><span class="val" style="font-size: 10px;">${devData.address}</span></div>
-                <div class="info-row"><span class="label">Risk Score</span><span class="val ${riskColor}">${devData.riskScore}/100 (${devData.riskLevel})</span></div>
-                <div class="info-row"><span class="label">Balance</span><span class="val">${(devData.balanceSol || 0).toFixed(3)} SOL</span></div>
-                <div class="info-row"><span class="label">TX Count</span><span class="val">${devData.totalTxCount || 0}</span></div>
-                <div class="info-row"><span class="label">Tokens Deployed</span><span class="val">${devData.tokensDeployed || 0}</span></div>
-                <div class="info-row"><span class="label">Wallet Age</span><span class="val">${devData.walletAge || 0} days</span></div>
+                <div class="info-row"><span class="label">Địa chỉ</span><span class="val" style="font-size: 10px;">${devData.address}</span></div>
+                <div class="info-row"><span class="label"><span class="term-en" data-tooltip="Điểm đánh giá mức độ rủi ro của dev (0=an toàn, 100=nguy hiểm)">Risk Score</span></span><span class="val ${riskColor}">${devData.riskScore}/100 (${devData.riskLevel})</span></div>
+                <div class="info-row"><span class="label">Số dư</span><span class="val">${(devData.balanceSol || 0).toFixed(3)} SOL</span></div>
+                <div class="info-row"><span class="label">Số giao dịch</span><span class="val">${devData.totalTxCount || 0}</span></div>
+                <div class="info-row"><span class="label">Token đã tạo</span><span class="val">${devData.tokensDeployed || 0}</span></div>
+                <div class="info-row"><span class="label">Tuổi ví</span><span class="val">${devData.walletAge || 0} ngày</span></div>
             `;
         } else if (data.devRiskScore !== undefined) {
-            html += `<div class="info-row"><span class="label">Risk Score</span><span class="val">${data.devRiskScore}/100</span></div>`;
+            html += `<div class="info-row"><span class="label"><span class="term-en" data-tooltip="Điểm đánh giá mức độ rủi ro của dev">Risk Score</span></span><span class="val">${data.devRiskScore}/100</span></div>`;
         } else {
-            html += `<div style="color: var(--text-muted); font-size: 11px;">No data</div>`;
+            html += `<div style="color: var(--text-muted); font-size: 11px;">Không có dữ liệu</div>`;
         }
         html += `</div>`;
 
@@ -992,7 +992,7 @@ function renderAnalysis(data) {
 // ═══════════════════════════════════════
 socket.on('passedTokensUpdate', (tokens) => {
     if (!tokens || tokens.length === 0) {
-        passedTokensContainer.innerHTML = '<div class="placeholder-text">No tokens passed in 24h</div>';
+        passedTokensContainer.innerHTML = '<div class="placeholder-text">Chưa có token qua lọc trong 24h</div>';
         if (totalPassedEl) totalPassedEl.textContent = 0;
         return;
     }
@@ -1059,7 +1059,7 @@ socket.on('passedTokensUpdate', (tokens) => {
 // ═══════════════════════════════════════
 socket.on('topPnLUpdate', (tokens) => {
     if (!tokens || tokens.length === 0) {
-        if(top10Container) top10Container.innerHTML = '<div class="placeholder-text">Not enough data to calculate top 10</div>';
+        if(top10Container) top10Container.innerHTML = '<div class="placeholder-text">Chưa đủ dữ liệu để tính Top 10</div>';
         return;
     }
 
@@ -1137,7 +1137,7 @@ socket.on('winRateUpdate', (data) => {
 // ═══════════════════════════════════════
 socket.on('tradeHistory', (trades) => {
     if (!trades || trades.length === 0) {
-        tradeHistoryContainer.innerHTML = '<div class="placeholder-text">No trades yet</div>';
+        tradeHistoryContainer.innerHTML = '<div class="placeholder-text">Chưa có lệnh nào</div>';
         return;
     }
 
