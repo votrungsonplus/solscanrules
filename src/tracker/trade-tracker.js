@@ -26,7 +26,7 @@ class TradeTracker {
     this.db.pragma('synchronous = NORMAL');
     this.db.pragma('cache_size = -64000'); // 64MB cache
     this.db.pragma('temp_store = MEMORY');
-    this.db.pragma('mmap_size = 30000000000'); // 30GB mmap
+    this.db.pragma('mmap_size = 268435456'); // 256MB mmap
 
 
     this._createTables();

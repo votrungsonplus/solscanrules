@@ -41,6 +41,7 @@ class Orchestrator extends EventEmitter {
     this.analyzedTokens = new Set(); // track ALL tokens recorded to scans (pass or fail)
     this.holderStatsCache = new Map(); // mint -> { data, timestamp }
     this.pendingRechecks = new Map(); // mint -> timeout id
+    this._safetyNetTimeouts = new Map(); // mint -> timeout id for 5s safety-net
   }
 
   async _loadTokenAccountOwners(accounts) {
@@ -421,7 +422,8 @@ class Orchestrator extends EventEmitter {
 
     // Safety net: if no buyer arrives within 5s (trade missed due to race condition),
     // force analysis with whatever data we have so the token isn't silently dropped
-    setTimeout(() => {
+    const safetyTimeout = setTimeout(() => {
+      this._safetyNetTimeouts.delete(mint);
       const buyers = this.tokenEarlyBuyers.get(mint);
       if (buyers && buyers.length === 0 && !this.analyzedTokens.has(mint) && !this.processingTokens.has(mint) && this.tokenData.has(mint)) {
         logger.info(`⚠️ No buyer detected for ${tokenData.symbol} after 5s — possible missed trades. Queuing safety analysis.`);
@@ -440,6 +442,7 @@ class Orchestrator extends EventEmitter {
         this._processAnalysisQueue();
       }
     }, 5000);
+    this._safetyNetTimeouts.set(mint, safetyTimeout);
   }
 
   /**
@@ -460,6 +463,10 @@ class Orchestrator extends EventEmitter {
     if (!earlyBuyers) return;
 
     if (tradeData.txType === 'buy' && earlyBuyers.length < settings.monitoring.earlyBuyersToMonitor) {
+      // Clear safety-net timeout since a real buyer arrived
+      const safetyId = this._safetyNetTimeouts.get(mint);
+      if (safetyId) { clearTimeout(safetyId); this._safetyNetTimeouts.delete(mint); }
+
       // Don't add duplicates
       if (!earlyBuyers.some(b => b.address === tradeData.trader)) {
         earlyBuyers.push({
@@ -2024,12 +2031,15 @@ class Orchestrator extends EventEmitter {
     for (const [mint, data] of this.tokenData) {
       if (now - data.timestamp > maxAge && !sellExecutor.getPositions().some(p => p.mint === mint)) {
         this._clearPendingRecheck(mint);
+        const safetyId = this._safetyNetTimeouts.get(mint);
+        if (safetyId) { clearTimeout(safetyId); this._safetyNetTimeouts.delete(mint); }
         this.tokenData.delete(mint);
         this.tokenEarlyBuyers.delete(mint);
         this.tokenGlobalFees.delete(mint);
         this.passedTokens.delete(mint);
         this.analyzedTokens.delete(mint);
         this.processingTokens.delete(mint);
+        this.holderStatsCache.delete(mint);
         detector.unsubscribeFromToken(mint);
       }
     }

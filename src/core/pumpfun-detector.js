@@ -77,8 +77,15 @@ class PumpFunDetector extends EventEmitter {
   _reconnect() {
     if (!this.isRunning) return;
     if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-      logger.error('Max reconnect attempts reached for PumpFun WebSocket');
+      logger.error('Max reconnect attempts reached for PumpFun WebSocket. Auto-recovery in 60s...');
       this.emit('disconnected');
+      // Auto-recovery: reset counter and retry after 60s cooldown
+      setTimeout(() => {
+        if (!this.isRunning) return;
+        logger.info('🔄 Auto-recovery: Attempting to reconnect PumpFun WebSocket...');
+        this.reconnectAttempts = 0;
+        this._connect();
+      }, 60000);
       return;
     }
 
