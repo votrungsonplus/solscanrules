@@ -9,6 +9,12 @@ const tracker = require('../tracker/trade-tracker');
 const priceService = require('../services/price-service');
 const sellExecutor = require('../executor/sell-executor');
 const { SolanaConnection: solana } = require('../core/solana-connection');
+const {
+  applyRuleProfile,
+  getRuleProfiles,
+  markProfileAsCustom,
+  persistAppliedRuleProfile,
+} = require('../engine/rule-profiles');
 
 class WebServer {
   constructor() {
@@ -77,6 +83,7 @@ class WebServer {
       showAllEarlyBuyers: settings.monitoring.showAllEarlyBuyers,
       buySlippage: settings.trading.buySlippage,
       sellSlippage: settings.trading.sellSlippage,
+      activeRuleProfile: ruleEngine.getActiveProfile(),
       realWallet: await solana.getWalletSummary(),
     });
 
@@ -99,6 +106,14 @@ class WebServer {
         showAllEarlyBuyers: settings.monitoring.showAllEarlyBuyers,
         buySlippage: settings.trading.buySlippage,
         sellSlippage: settings.trading.sellSlippage,
+        activeRuleProfile: ruleEngine.getActiveProfile(),
+      });
+    });
+
+    this.app.get('/api/rule-profiles', (req, res) => {
+      res.json({
+        activeRuleProfile: ruleEngine.getActiveProfile(),
+        profiles: getRuleProfiles(),
       });
     });
 
@@ -244,6 +259,10 @@ class WebServer {
 
       // Send initial data for persistence across reloads
       socket.emit('rulesList', ruleEngine.getRules());
+      socket.emit('ruleProfiles', {
+        activeRuleProfile: ruleEngine.getActiveProfile(),
+        profiles: getRuleProfiles(),
+      });
       socket.emit('passedTokensUpdate', tracker.getPassedTokens24h());
       socket.emit('topPnLUpdate', tracker.getTopPnLTokens('24h'));
       socket.emit('winRateUpdate', tracker.getWinRateStats());
@@ -276,7 +295,12 @@ class WebServer {
         const { ruleId, enabled } = data;
         ruleEngine.toggleRule(ruleId, enabled);
         tracker.saveRuleState(ruleId, enabled);
+        markProfileAsCustom(tracker, ruleEngine);
         this.io.emit('rulesList', ruleEngine.getRules());
+        this.io.emit('ruleProfiles', {
+          activeRuleProfile: ruleEngine.getActiveProfile(),
+          profiles: getRuleProfiles(),
+        });
         logger.info(`Web action: Rule ${ruleId} set to ${enabled} (Saved to DB)`);
       });
 
@@ -288,8 +312,29 @@ class WebServer {
         if (isNaN(val)) return;
         ruleEngine.updateRule(ruleId, { [param]: val });
         tracker.saveBotSetting(`rule_${ruleId}_${param}`, val);
+        markProfileAsCustom(tracker, ruleEngine);
         this.io.emit('rulesList', ruleEngine.getRules());
+        this.io.emit('ruleProfiles', {
+          activeRuleProfile: ruleEngine.getActiveProfile(),
+          profiles: getRuleProfiles(),
+        });
         logger.info(`Web action: Rule ${ruleId}.${param} = ${val} (Saved to DB)`);
+      });
+
+      socket.on('applyRuleProfile', async (profileId) => {
+        try {
+          const profile = applyRuleProfile(ruleEngine, profileId);
+          persistAppliedRuleProfile(tracker, ruleEngine, profile.id);
+          this.io.emit('rulesList', ruleEngine.getRules());
+          this.io.emit('ruleProfiles', {
+            activeRuleProfile: ruleEngine.getActiveProfile(),
+            profiles: getRuleProfiles(),
+          });
+          this.io.emit('botStatus', await buildBotStatusPayload());
+          logger.info(`Web action: Applied rule profile ${profile.id}`);
+        } catch (err) {
+          logger.warn(`Failed to apply rule profile ${profileId}: ${err.message}`);
+        }
       });
 
       // Update auto-buy
@@ -349,15 +394,18 @@ class WebServer {
             if (val < 1 || val > 20) return;
             settings.monitoring.earlyBuyersToMonitor = Math.round(val);
             tracker.saveBotSetting('earlyBuyersToMonitor', settings.monitoring.earlyBuyersToMonitor);
+            markProfileAsCustom(tracker, ruleEngine);
             break;
           case 'minBuyersToPass':
             if (val < 1 || val > 20) return;
             settings.monitoring.minBuyersToPass = Math.round(val);
             tracker.saveBotSetting('minBuyersToPass', settings.monitoring.minBuyersToPass);
+            markProfileAsCustom(tracker, ruleEngine);
             break;
           case 'showAllEarlyBuyers':
             settings.monitoring.showAllEarlyBuyers = value === 'true' || value === true;
             tracker.saveBotSetting('showAllEarlyBuyers', settings.monitoring.showAllEarlyBuyers);
+            markProfileAsCustom(tracker, ruleEngine);
             break;
           case 'buySlippage':
             if (val < 1 || val > 100) return;
@@ -374,6 +422,10 @@ class WebServer {
         }
 
         this.io.emit('botStatus', await buildBotStatusPayload());
+        this.io.emit('ruleProfiles', {
+          activeRuleProfile: ruleEngine.getActiveProfile(),
+          profiles: getRuleProfiles(),
+        });
         logger.info(`Web action: ${key} = ${val} (Saved to DB)`);
       });
 

@@ -10,6 +10,8 @@ const { buildDefaultRules } = require('./rules');
 class RuleEngine {
   constructor() {
     this.rules = new Map();
+    this.defaultRules = new Map();
+    this.activeProfile = 'custom';
     this._registerDefaultRules();
   }
 
@@ -21,6 +23,9 @@ class RuleEngine {
       const { id, ...rest } = rule;
       this.addRule(id, rest);
     }
+    this.defaultRules = new Map(
+      [...this.rules.entries()].map(([id, rule]) => [id, { ...rule }])
+    );
   }
 
   /**
@@ -69,6 +74,21 @@ class RuleEngine {
       Object.assign(rule, params);
       logger.debug(`Rule ${id} updated`);
     }
+  }
+
+  resetToDefaults() {
+    this.rules = new Map(
+      [...this.defaultRules.entries()].map(([id, rule]) => [id, { ...rule }])
+    );
+    logger.debug('Rule engine reset to default definitions');
+  }
+
+  setActiveProfile(profileId) {
+    this.activeProfile = profileId || 'custom';
+  }
+
+  getActiveProfile() {
+    return this.activeProfile || 'custom';
   }
 
   /**

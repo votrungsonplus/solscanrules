@@ -54,6 +54,8 @@ class TelegramBot {
         { command: 'pnl', description: 'Lãi/lỗ hôm nay' },
         { command: 'history', description: 'Lịch sử giao dịch' },
         { command: 'rules', description: 'Danh sách rules đang hoạt động' },
+        { command: 'profiles', description: 'Danh sách profile chiến lược' },
+        { command: 'apply_profile', description: 'Áp preset rule profile' },
         { command: 'reset', description: 'Khởi động lại Bot' },
         { command: 'reset_pnl', description: 'Xóa trắng lãi lỗ & vị thế' },
         { command: 'config', description: 'Xem toàn bộ cấu hình hiện tại' },
@@ -99,6 +101,8 @@ class TelegramBot {
         '⚙️ *Cấu hình:*\n' +
         '/config — Xem toàn bộ cấu hình hiện tại\n' +
         '/rules — Xem điều kiện lọc kèo (chi tiết)\n' +
+        '/profiles — Xem preset chiến lược\n' +
+        '/apply\\_profile <id> — Áp preset rule\n' +
         '/toggle\\_rule <id> — Bật/tắt điều kiện\n\n' +
         '💰 *Giao dịch:*\n' +
         '/set\\_amount <sol> — Đặt số SOL mua mỗi lệnh\n' +
@@ -134,6 +138,18 @@ class TelegramBot {
     // /rules
     this.bot.command('rules', (ctx) => {
       this._handleCommand('rules', {}, ctx);
+    });
+
+    // /profiles
+    this.bot.command('profiles', (ctx) => {
+      this._handleCommand('profiles', {}, ctx);
+    });
+
+    // /apply_profile <id>
+    this.bot.command('apply_profile', (ctx) => {
+      const parts = ctx.message.text.split(/\s+/);
+      const profileId = parts[1];
+      this._handleCommand('apply_profile', { profileId }, ctx);
     });
 
     // /toggle_rule <id>

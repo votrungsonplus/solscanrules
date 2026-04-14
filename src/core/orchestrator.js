@@ -15,6 +15,13 @@ const walletAnalyzer = require('../analyzers/wallet-analyzer');
 const devAnalyzer = require('../analyzers/dev-analyzer');
 const tokenScorer = require('../analyzers/token-scorer');
 const ruleEngine = require('../engine/rule-engine');
+const {
+  applyRuleProfile,
+  getRuleProfile,
+  getRuleProfiles,
+  markProfileAsCustom,
+  persistAppliedRuleProfile,
+} = require('../engine/rule-profiles');
 const buyExecutor = require('../executor/buy-executor');
 const sellExecutor = require('../executor/sell-executor');
 const telegram = require('../telegram/telegram-bot');
@@ -167,6 +174,7 @@ class Orchestrator extends EventEmitter {
     // 3. Load persistent settings from DB
     const savedRuleStates = tracker.getAllRuleStates();
     ruleEngine.loadStates(savedRuleStates);
+    ruleEngine.setActiveProfile(tracker.getBotSetting('activeRuleProfile', 'custom'));
     
     const savedAutoBuy = tracker.getBotSetting('autoBuyEnabled');
     if (savedAutoBuy !== null) {
@@ -1544,8 +1552,43 @@ class Orchestrator extends EventEmitter {
         }
         text += `*Hướng dẫn:*\n`;
         text += `• Bật/tắt: /toggle\\_rule <id>\n`;
+        text += `• Profile: /profiles | /apply\\_profile <id>\n`;
         text += `• VD: /toggle\\_rule dev\\_risk\\_check\n`;
         return text;
+      }
+
+      case 'profiles': {
+        const profiles = getRuleProfiles();
+        const activeProfile = ruleEngine.getActiveProfile();
+        let text = '*🧭 RULE PROFILES*\n\n';
+        for (const profile of profiles) {
+          const activeMark = profile.id === activeProfile ? '✅' : '•';
+          text += `${activeMark} *${profile.name}*\n`;
+          text += `   ID: \`${profile.id}\`\n`;
+          text += `   ${profile.description}\n\n`;
+        }
+        if (activeProfile === 'custom') {
+          text += `• *Custom*\n`;
+          text += `   ID: \`custom\`\n`;
+          text += `   Trạng thái hiện tại đã bị chỉnh tay sau khi áp preset.\n\n`;
+        }
+        text += '*Dùng:* /apply\\_profile <id>\n';
+        return text;
+      }
+
+      case 'apply_profile': {
+        if (!params.profileId) {
+          return 'Cách dùng: /apply\\_profile <id>\nVD: /apply\\_profile balanced_backup3';
+        }
+        const profile = getRuleProfile(params.profileId);
+        if (!profile) {
+          return `❌ Không tìm thấy profile \`${params.profileId}\`\nGõ /profiles để xem danh sách`;
+        }
+
+        applyRuleProfile(ruleEngine, params.profileId);
+        persistAppliedRuleProfile(tracker, ruleEngine, params.profileId);
+
+        return `✅ Đã áp dụng profile \`${profile.id}\` (${profile.name})`;
       }
 
       case 'toggle_rule': {
@@ -1554,6 +1597,8 @@ class Orchestrator extends EventEmitter {
         const rule = rules.find(r => r.id === params.ruleId);
         if (!rule) return `❌ Không tìm thấy điều kiện \`${params.ruleId}\`\nGõ /rules để xem danh sách`;
         ruleEngine.toggleRule(params.ruleId, !rule.enabled);
+        tracker.saveRuleState(params.ruleId, !rule.enabled);
+        markProfileAsCustom(tracker, ruleEngine);
         return `✅ Điều kiện \`${params.ruleId}\`: ${!rule.enabled ? 'ĐÃ BẬT ✅' : 'ĐÃ TẮT ❌'}`;
       }
 
@@ -1561,6 +1606,7 @@ class Orchestrator extends EventEmitter {
         if (!params.amount || params.amount <= 0) return 'Cách dùng: /set\\_mcap <số SOL>\nVD: /set\\_mcap 15\n\nToken phải đạt MCap này mới pass. Nếu chưa đạt sẽ quét lại liên tục.';
         ruleEngine.updateRule('market_cap_check', { minMarketCapSol: params.amount });
         tracker.saveBotSetting('rule_market_cap_check_minMarketCapSol', params.amount);
+        markProfileAsCustom(tracker, ruleEngine);
         return `✅ Min Market Cap: ${params.amount} SOL\nToken chưa đạt sẽ được quét lại liên tục đến khi đạt hoặc quá ${this._getMaxAgeMinutes()} phút.`;
       }
 
@@ -1623,6 +1669,7 @@ class Orchestrator extends EventEmitter {
         const rules = ruleEngine.getRules();
         const typeLabels = { REQUIRE: 'Bắt buộc', ALERT: 'Cảnh báo', INFO: 'Thông tin' };
         let text = `*⚙️ CẤU HÌNH HIỆN TẠI*\n\n`;
+        text += `*🧭 Profile:* \`${ruleEngine.getActiveProfile()}\`\n\n`;
         text += `*💰 Giao dịch:*\n`;
         text += `• Tự động mua: ${settings.trading.autoBuyEnabled ? 'BẬT ✅' : 'TẮT ❌'}\n`;
         text += `• Số SOL mỗi lệnh: ${formatSol(settings.trading.buyAmountSol)}\n`;
@@ -1654,6 +1701,8 @@ class Orchestrator extends EventEmitter {
         text += `/set\\_tp <số> — Chốt lời %\n`;
         text += `/set\\_sl <số> — Cắt lỗ %\n`;
         text += `/toggle\\_rule <id> — Bật/tắt điều kiện\n`;
+        text += `/profiles — Xem profiles\n`;
+        text += `/apply\\_profile <id> — Áp preset chiến lược\n`;
         return text;
       }
 
@@ -1661,6 +1710,7 @@ class Orchestrator extends EventEmitter {
         if (!params.count || params.count < 1 || params.count > 20) return 'Cách dùng: /set\\_buyers <1-20>\nVD: /set\\_buyers 10';
         settings.monitoring.earlyBuyersToMonitor = params.count;
         tracker.saveBotSetting('earlyBuyersToMonitor', params.count);
+        markProfileAsCustom(tracker, ruleEngine);
         return `✅ Số ví mua sớm theo dõi: ${params.count}`;
       }
 
@@ -1668,7 +1718,9 @@ class Orchestrator extends EventEmitter {
         if (!params.threshold || params.threshold < 0) return 'Cách dùng: /set\\_fee <sol>\nVD: /set\\_fee 1.0';
         settings.monitoring.globalFeeThreshold = params.threshold;
         tracker.saveBotSetting('globalFeeThreshold', params.threshold);
-        ruleEngine.updateRule('global_fee_threshold', {});
+        ruleEngine.updateRule('global_fee_threshold', { minGlobalFee: params.threshold });
+        tracker.saveBotSetting('rule_global_fee_threshold_minGlobalFee', params.threshold);
+        markProfileAsCustom(tracker, ruleEngine);
         return `✅ Ngưỡng Global Fee: ${params.threshold} SOL`;
       }
 
