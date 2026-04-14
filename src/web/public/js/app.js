@@ -69,6 +69,174 @@ let autoReloadSeconds = DEFAULT_AUTO_RELOAD_SECONDS;
 let autoReloadDeadline = Date.now() + DEFAULT_AUTO_RELOAD_SECONDS * 1000;
 let autoReloadTimer = null;
 
+const TERM_TOOLTIPS = {
+    pnl: 'Profit & Loss — Lợi hoặc lỗ của giao dịch hay danh mục.',
+    marketCap: 'Market Cap — Vốn hoa thi truong cua token.',
+    ath: 'All-Time High — Muc cao nhat token da dat duoc.',
+    volume: 'Volume — Khoi luong giao dich.',
+    globalFee: 'Tong phi giao dich, thuong xap xi Volume x 1%.',
+    bondingCurve: 'Bonding Curve — Tien do duong cong gia tren pump.fun; 100% la len DEX.',
+    riskScore: 'Risk Score — Diem danh gia muc do rui ro.',
+    tokenScore: 'Token Score — Diem danh gia chat luong token.',
+    metadata: 'Metadata — Thong tin mo ta cua token.',
+    uriScore: 'URI Score — Diem danh gia duong dan metadata.',
+    dev: 'Dev — Vi deployer hoac nguoi tao token.',
+    deployer: 'Deployer — Vi tao token.',
+    whiteWallet: 'White Wallet — Vi moi/sach, it lich su giao dich.',
+    cex: 'CEX — San giao dich tap trung.',
+    cluster: 'Cluster — Nhom vi co lien he nguon von hoac hanh vi.',
+    bundle: 'Bundle — Cum lenh/nhom vi di cung nhau.',
+    earlyBuyers: 'Early Buyers — Cac vi mua trong nhung giao dich dau tien cua token.',
+    holder: 'Holder — Vi dang nam giu token.',
+    mint: 'Mint — Dia chi token tren blockchain Solana.',
+    mcCirc: 'MC luu hanh — Von hoa tinh tren luong cung dang luu hanh.',
+    liveStatus: 'LIVE — Dang co du lieu thi truong moi va tiep tuc duoc cap nhat.',
+    autoBuy: 'Auto-Buy — Tu dong mua khi token vuot qua bo loc quy tac.',
+    autoSell: 'Auto-Sell — Tu dong ban khi cham Take Profit, Stop Loss hoac phat hien rug.',
+    slippage: 'Slippage — Do truot gia chap nhan khi khop lenh.',
+    takeProfit: 'Take Profit — Nguong loi nhuan de tu dong chot loi.',
+    stopLoss: 'Stop Loss — Nguong lo toi da de tu dong cat lo.',
+    sniper: 'Sniper — Mua/ban thu cong tuc thi theo dia chi mint.',
+    jitoBundle: 'Jito Bundle — Cach gui giao dich qua mang Jito de tang kha nang lenh duoc vao block va giam front-run.',
+};
+
+function escapeHtml(value = '') {
+    return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+function renderTerm(label, tooltipKeyOrText) {
+    const tooltip = TERM_TOOLTIPS[tooltipKeyOrText] || tooltipKeyOrText || '';
+    const safeLabel = escapeHtml(label);
+    const safeTooltip = escapeHtml(tooltip);
+    return `<span class="term-en" data-tooltip="${safeTooltip}">${safeLabel}</span>`;
+}
+
+function formatRichText(value = '') {
+    let html = escapeHtml(value);
+    const replacements = [
+        ['Risk Score', renderTerm('Risk Score', 'riskScore')],
+        ['Token Score', renderTerm('Token Score', 'tokenScore')],
+        ['Global Fee', renderTerm('Global Fee', 'globalFee')],
+        ['Bonding Curve', renderTerm('Bonding Curve', 'bondingCurve')],
+        ['White Wallet', renderTerm('White Wallet', 'whiteWallet')],
+        ['Early Buyers', renderTerm('Early Buyers', 'earlyBuyers')],
+        ['Early Buyer', renderTerm('Early Buyer', 'earlyBuyers')],
+        ['Deployer', renderTerm('Deployer', 'deployer')],
+        ['Bundle', renderTerm('Bundle', 'bundle')],
+        ['Cluster', renderTerm('Cluster', 'cluster')],
+        ['Volume', renderTerm('Volume', 'volume')],
+        ['Market Cap', renderTerm('Market Cap', 'marketCap')],
+        ['MCap', renderTerm('MCap', 'marketCap')],
+        ['ATH', renderTerm('ATH', 'ath')],
+        ['CEX', renderTerm('CEX', 'cex')],
+        ['Dev', renderTerm('Dev', 'dev')],
+    ];
+
+    for (const [needle, replacement] of replacements) {
+        html = html.replaceAll(needle, replacement);
+    }
+
+    return html.replace(/\n/g, '<br>');
+}
+
+function hydrateTermAnnotations(root = document) {
+    root.querySelectorAll('.term-en').forEach((el) => {
+        const tooltip = el.dataset.tooltip;
+        if (!tooltip) return;
+        el.setAttribute('title', tooltip);
+        el.setAttribute('tabindex', '0');
+        el.setAttribute('aria-label', `${el.textContent.trim()}: ${tooltip}`);
+    });
+}
+
+const PROFILE_COPY = {
+    strict_current: {
+        name: 'Gat - Logic hien tai',
+        description: 'Preset chat nhat, bam sat logic hien tai de uu tien loc sach.',
+    },
+    balanced_backup3: {
+        name: 'Can bang - Backup3',
+        description: 'Preset can bang, gan voi backup3 va la diem giua de so sanh cac chien luoc.',
+    },
+    loose_backup2: {
+        name: 'Thoang - Backup2',
+        description: 'Preset de thoang hon de tang so keo, gan voi tinh than backup2.',
+    },
+    custom: {
+        name: 'Tuy chinh',
+        description: 'Trang thai hien tai sau khi chinh tay. Ap lai preset de quay ve cau hinh chuan.',
+    },
+};
+
+const RULE_TYPE_LABELS = {
+    REQUIRE: 'BAT BUOC',
+    BLOCK: 'CHAN',
+    ALERT: 'CANH BAO',
+    INFO: 'TIN HIEU',
+    'PRE-SCAN': 'SO BO',
+};
+
+const RULE_COPY = {
+    white_wallet_from_deployer: `${renderTerm('White Wallet', 'whiteWallet')} tu ${renderTerm('Deployer', 'deployer')}`,
+    white_wallet_from_cex: `${renderTerm('White Wallet', 'whiteWallet')} tu ${renderTerm('CEX', 'cex')}`,
+    same_buy_amount: 'Phat hien mua cung luong',
+    global_fee_threshold: `${renderTerm('Global Fee', 'globalFee')} toi thieu`,
+    cluster_detection: `Phat hien ${renderTerm('Cluster', 'cluster')}`,
+    sybil_protection: 'Chong Sybil',
+    top10_holder_limit: `Gioi han Top 10 ${renderTerm('Holder', 'holder')}`,
+    dev_hold_limit: `${renderTerm('Dev', 'dev')} hold toi da`,
+    bundle_limit: `${renderTerm('Bundle', 'bundle')} toi da`,
+    volume_threshold: `${renderTerm('Volume', 'volume')} toi thieu`,
+    listing_age_limit: 'Gioi han tuoi niem yet',
+    market_cap_check: `${renderTerm('Market Cap', 'marketCap')} toi thieu`,
+    dev_risk_check: `${renderTerm('Risk Score', 'riskScore')} cua ${renderTerm('Dev', 'dev')}`,
+    token_score_check: `${renderTerm('Token Score', 'tokenScore')} toi thieu`,
+    bonding_curve_progress: `Tien do ${renderTerm('Bonding Curve', 'bondingCurve')}`,
+    fresh_wallet_check: 'Canh bao vi moi',
+    first_7_buyers_hold_limit: `Ty trong 7 ${renderTerm('Early Buyers', 'earlyBuyers')} dau`,
+    early_buyer_count_check: `So luong ${renderTerm('Early Buyers', 'earlyBuyers')}`,
+    preliminary_buyers: `Kiem tra ${renderTerm('Early Buyers', 'earlyBuyers')} so bo`,
+    preliminary_timeout: 'Het thoi gian theo doi',
+    analysis_error: 'Pipeline phan tich',
+};
+
+const RULE_PARAM_LABELS = {
+    tolerancePercent: 'Do lech cho phep (%)',
+    minGlobalFee: `${renderTerm('Global Fee', 'globalFee')} toi thieu (SOL)`,
+    maxPercent: 'Nguong toi da (%)',
+    minVol: `${renderTerm('Volume', 'volume')} toi thieu (SOL)`,
+    maxMinutes: 'Tuoi toi da (phut)',
+    minMarketCapSol: `${renderTerm('MC', 'marketCap')} toi thieu (SOL)`,
+    maxRiskScore: `${renderTerm('Risk Score', 'riskScore')} toi da`,
+    minScore: 'Diem toi thieu',
+    maxProgressPercent: `${renderTerm('Bonding Curve', 'bondingCurve')} toi da (%)`,
+    maxFreshCount: 'So vi moi toi da',
+    minSharedFunders: 'So vi me chung toi thieu',
+    minPercent: 'Nguong toi thieu (%)',
+    minCount: `So ${renderTerm('Early Buyers', 'earlyBuyers')} toi thieu`,
+};
+
+function getProfileCopy(profile) {
+    if (!profile) return PROFILE_COPY.custom;
+    return PROFILE_COPY[profile.id] || {
+        name: profile.name || PROFILE_COPY.custom.name,
+        description: profile.description || PROFILE_COPY.custom.description,
+    };
+}
+
+function getRuleDisplayName(ruleId, fallbackName = '') {
+    return RULE_COPY[ruleId] || formatRichText(fallbackName || ruleId);
+}
+
+function getRuleTypeLabel(ruleType = '') {
+    return RULE_TYPE_LABELS[ruleType] || ruleType;
+}
+
 // ── Uptime Timer ──
 setInterval(() => {
     const elapsed = Math.floor((Date.now() - startTime) / 1000);
@@ -264,28 +432,28 @@ function createFeedItem(token) {
     item.dataset.timestamp = token.timestamp || Date.now();
 
     let statusClass = 'pending';
-    let statusText = 'PENDING';
+    let statusText = 'DANG XU LY';
     if (token.status === 'ELIGIBLE' || token.status === 'PASS') {
         statusClass = 'pass';
-        statusText = 'PASS';
+        statusText = 'DAT';
         item.dataset.status = 'pass';
     } else if (token.status === 'BLOCKED' || token.status === 'FAIL') {
         statusClass = 'fail';
-        statusText = 'FAIL';
+        statusText = 'LOAI';
         item.dataset.status = 'fail';
     }
 
-    const mcapStr = token.marketCapSol
-        ? `${token.marketCapSol.toFixed(1)} SOL`
-        : '';
+    const symbol = escapeHtml(token.symbol || '???');
+    const tokenName = token.name ? escapeHtml(token.name.slice(0, 20)) : '';
+    const mint = escapeHtml(token.mint || '');
 
     item.innerHTML = `
         <div class="feed-item-row">
-            <span class="symbol">${token.symbol || '???'}<span class="name-dim">${token.name ? ` / ${token.name.slice(0, 20)}` : ''}</span></span>
+            <span class="symbol">${symbol}<span class="name-dim">${tokenName ? ` / ${tokenName}` : ''}</span></span>
             <span class="feed-badge ${statusClass}">${statusText}</span>
         </div>
         <div class="meta-row">
-            <span class="mint-short">${shortenMint(token.mint)}</span>
+            <span class="mint-short">${shortenMint(mint)}</span>
             <span class="age-tag" data-ts="${token.timestamp || Date.now()}">${getAge(token.timestamp || Date.now())}</span>
         </div>
     `;
@@ -337,7 +505,7 @@ function updateFeedItemStatus(mint, status) {
 
     if (status === 'ELIGIBLE') {
         badge.className = 'feed-badge pass';
-        badge.textContent = 'PASS';
+        badge.textContent = 'DAT';
         // Update passed counter (deduplicate)
         if (!countedPasses.has(mint)) {
             countedPasses.add(mint);
@@ -346,7 +514,7 @@ function updateFeedItemStatus(mint, status) {
         }
     } else {
         badge.className = 'feed-badge fail';
-        badge.textContent = 'FAIL';
+        badge.textContent = 'LOAI';
     }
 
     applyFilter();
@@ -473,7 +641,7 @@ function requestPassedTokenInfo(tokenOrMint) {
             infoOnly: true,
             tokenData: {
                 mint,
-                name: tokenOrMint.name || 'Unknown',
+                name: tokenOrMint.name || 'Khong ro',
                 symbol: tokenOrMint.symbol || '???',
                 timestamp: tokenOrMint.timestamp || Date.now(),
                 launchMcapUsd,
@@ -484,7 +652,7 @@ function requestPassedTokenInfo(tokenOrMint) {
             },
             ruleResult: {
                 shouldBuy: true,
-                summary: 'Passed token info',
+                summary: 'Thong tin token da qua loc',
                 results: []
             }
         });
@@ -566,7 +734,7 @@ socket.on('refreshPnLStatus', (data) => {
     }
     
     if (!data.success) {
-        console.error('PnL Refresh Failed:', data.message);
+        console.error('Lam moi PnL that bai:', data.message);
     }
 });
 
@@ -668,11 +836,14 @@ function renderAnalysis(data) {
     if (!tokenData || !ruleResult) return;
 
     const mint = tokenData.mint || '';
-    const symbol = tokenData.symbol || '???';
-    const name = tokenData.name || '';
-    const deployer = tokenData.deployer || '';
+    const safeMint = escapeHtml(mint);
+    const symbol = escapeHtml(tokenData.symbol || '???');
+    const name = escapeHtml(tokenData.name || '');
+    const deployer = escapeHtml(tokenData.deployer || '');
     const isPassed = ruleResult.shouldBuy;
     const timeStr = tokenData.timestamp ? new Date(tokenData.timestamp).toLocaleString('vi-VN') : '---';
+    const encodedMint = encodeURIComponent(mint);
+    const encodedRouteAddress = encodeURIComponent(tokenData.axiomRouteAddress || mint);
 
     // MCap - Axiom style: circulating market cap (excludes bonding curve/LP)
     const circulatingMcapSol = tokenData.circulatingMcapSol || tokenData.marketCapSol || 0;
@@ -689,19 +860,18 @@ function renderAnalysis(data) {
     html += `
         <div class="detail-header">
             <div class="detail-title">
-                <h3>${symbol} <span class="verdict-badge ${isPassed ? 'pass' : 'fail'}">${isPassed ? 'PASS' : 'FAIL'}</span></h3>
+                <h3>${symbol} <span class="verdict-badge ${isPassed ? 'pass' : 'fail'}">${isPassed ? 'DAT' : 'LOAI'}</span></h3>
                 <div style="font-size: 12px; color: var(--text-muted);">${name}</div>
                 <div class="detail-mint">
-                    <span>${mint}</span>
+                    <span>${safeMint}</span>
                     <button class="copy-btn" onclick="navigator.clipboard.writeText('${mint}')"><i class="fas fa-copy"></i></button>
                 </div>
             </div>
             <div class="detail-links">
-                <a href="https://pump.fun/coin/${mint}" target="_blank"><i class="fas fa-rocket"></i> Pump</a>
-
-                <a href="https://dexscreener.com/solana/${mint}" target="_blank"><i class="fas fa-chart-area"></i> DexS</a>
-                <a href="https://solscan.io/token/${mint}" target="_blank"><i class="fas fa-cube"></i> Solscan</a>
-                <a href="https://trade.padre.gg/trade/solana/${tokenData.axiomRouteAddress || mint}" target="_blank"><i class="fas fa-fire"></i> Padre</a>
+                <a href="https://pump.fun/coin/${encodedMint}" target="_blank" rel="noreferrer"><i class="fas fa-rocket"></i> Pump</a>
+                <a href="https://dexscreener.com/solana/${encodedMint}" target="_blank" rel="noreferrer"><i class="fas fa-chart-area"></i> DexS</a>
+                <a href="https://solscan.io/token/${encodedMint}" target="_blank" rel="noreferrer"><i class="fas fa-cube"></i> Solscan</a>
+                <a href="https://trade.padre.gg/trade/solana/${encodedRouteAddress}" target="_blank" rel="noreferrer"><i class="fas fa-fire"></i> Padre</a>
             </div>
         </div>
     `;
@@ -714,23 +884,23 @@ function renderAnalysis(data) {
     html += `
         <div class="market-data">
             <div class="market-item">
-                <div class="label">MC (Circ)</div>
+                <div class="label">${renderTerm('MC', 'mcCirc')}</div>
                 <div class="value">${circulatingMcapSol > 0 ? circulatingMcapSol.toFixed(1) + ' SOL' : '---'}</div>
             </div>
             <div class="market-item">
-                <div class="label">MC USD</div>
+                <div class="label">${renderTerm('MC', 'marketCap')} USD</div>
                 <div class="value green">${circulatingMcapUsd > 0 ? '$' + formatNumber(circulatingMcapUsd) : '---'}</div>
             </div>
             <div class="market-item">
-                <div class="label">Peak (ATH)</div>
+                <div class="label">Dinh (${renderTerm('ATH', 'ath')})</div>
                 <div class="value highlight-val up">$${highMcap > 0 ? formatNumber(highMcap) : '---'} <span style="font-size:12px; opacity:0.8">(x${peakMultiplier})</span></div>
             </div>
             <div class="market-item">
-                <div class="label">Volume</div>
+                <div class="label">${renderTerm('Volume', 'volume')}</div>
                 <div class="value">${volume > 0 ? volume.toFixed(1) + ' SOL' : '---'}</div>
             </div>
             <div class="market-item">
-                <div class="label">Global Fee</div>
+                <div class="label">${renderTerm('Global Fee', 'globalFee')}</div>
                 <div class="value yellow">${gFee > 0 ? gFee.toFixed(4) + ' SOL' : '---'}</div>
             </div>
         </div>
@@ -752,42 +922,43 @@ function renderAnalysis(data) {
             : 0;
 
         html += `
-            <div class="section-title"><i class="fas fa-circle-info"></i> Token Info</div>
+            <div class="section-title"><i class="fas fa-circle-info"></i> Thong tin token</div>
             <div class="info-only-actions">
                 <button class="refresh-btn" id="refreshPassedInfoBtn" onclick="refreshPassedTokenInfo('${mint}')">
                     <i class="fas fa-rotate"></i>
-                    <span>Cập nhật trạng thái</span>
+                    <span>Cap nhat trang thai</span>
                 </button>
             </div>
             <div class="info-grid">
                 <div class="info-card">
-                    <h4><i class="fas fa-coins"></i> Ảnh chụp thị trường</h4>
-                    <div class="info-row"><span class="label">MC khi pass</span><span class="val">${launchMcapUsd > 0 ? '$' + formatNumber(launchMcapUsd) : '---'}</span></div>
-                    <div class="info-row"><span class="label">MC hiện tại</span><span class="val yellow">${currentMcapUsd > 0 ? '$' + formatNumber(currentMcapUsd) : '---'}</span></div>
-                    <div class="info-row"><span class="label">MC cao nhất</span><span class="val green">${highestMcapUsd > 0 ? '$' + formatNumber(highestMcapUsd) : '---'}</span></div>
-                    <div class="info-row"><span class="label">Hiệu suất</span><span class="val ${performancePct >= 0 ? 'green' : 'red'}">${performancePct >= 0 ? '+' : ''}${performancePct.toFixed(1)}%</span></div>
+                    <h4><i class="fas fa-coins"></i> Anh chup thi truong</h4>
+                    <div class="info-row"><span class="label">${renderTerm('MC', 'marketCap')} luc qua loc</span><span class="val">${launchMcapUsd > 0 ? '$' + formatNumber(launchMcapUsd) : '---'}</span></div>
+                    <div class="info-row"><span class="label">${renderTerm('MC', 'marketCap')} hien tai</span><span class="val yellow">${currentMcapUsd > 0 ? '$' + formatNumber(currentMcapUsd) : '---'}</span></div>
+                    <div class="info-row"><span class="label">${renderTerm('MC', 'marketCap')} cao nhat</span><span class="val green">${highestMcapUsd > 0 ? '$' + formatNumber(highestMcapUsd) : '---'}</span></div>
+                    <div class="info-row"><span class="label">Hieu suat</span><span class="val ${performancePct >= 0 ? 'green' : 'red'}">${performancePct >= 0 ? '+' : ''}${performancePct.toFixed(1)}%</span></div>
                 </div>
                 <div class="info-card">
-                    <h4><i class="fas fa-wave-square"></i> Dữ liệu thực</h4>
-                    <div class="info-row"><span class="label">Volume (24h)</span><span class="val highlight-val">${tokenData.volume > 0 ? tokenData.volume.toFixed(1) + ' SOL' : '---'}</span></div>
-                    <div class="info-row"><span class="label"><span class="term-en" data-tooltip="Tổng phí giao dịch = Volume × 1%">Global Fee</span></span><span class="val highlight-val yellow">${tokenData.globalFee > 0 ? tokenData.globalFee.toFixed(4) + ' SOL' : '---'}</span></div>
-                    <div class="info-row"><span class="label">Holder</span><span class="val highlight-val green">${holderStats?.realHolderCount || '---'}</span></div>
-                    <div class="info-row"><span class="label">Cập nhật lúc</span><span class="val">${refreshedAt}</span></div>
+                    <h4><i class="fas fa-wave-square"></i> Du lieu thi truong</h4>
+                    <div class="info-row"><span class="label">${renderTerm('Volume', 'volume')} (24h)</span><span class="val highlight-val">${tokenData.volume > 0 ? tokenData.volume.toFixed(1) + ' SOL' : '---'}</span></div>
+                    <div class="info-row"><span class="label">${renderTerm('Global Fee', 'globalFee')}</span><span class="val highlight-val yellow">${tokenData.globalFee > 0 ? tokenData.globalFee.toFixed(4) + ' SOL' : '---'}</span></div>
+                    <div class="info-row"><span class="label">${renderTerm('Holder', 'holder')}</span><span class="val highlight-val green">${holderStats?.realHolderCount || '---'}</span></div>
+                    <div class="info-row"><span class="label">Cap nhat luc</span><span class="val">${refreshedAt}</span></div>
                 </div>
                 <div class="info-card">
-                    <h4><i class="fas fa-clock"></i> Dòng thời gian</h4>
-                    <div class="info-row"><span class="label">Qua lọc lúc</span><span class="val">${passedAt}</span></div>
-                    <div class="info-row"><span class="label"><span class="term-en" data-tooltip="Thời điểm đạt vốn hóa cao nhất">ATH</span> lúc</span><span class="val">${highestAt}</span></div>
-                    <div class="info-row"><span class="label">Người tạo</span><span class="val" style="font-size: 10px;">${deployer || '---'}</span></div>
+                    <h4><i class="fas fa-clock"></i> Dong thoi gian</h4>
+                    <div class="info-row"><span class="label">Qua loc luc</span><span class="val">${passedAt}</span></div>
+                    <div class="info-row"><span class="label">${renderTerm('ATH', 'ath')} luc</span><span class="val">${highestAt}</span></div>
+                    <div class="info-row"><span class="label">${renderTerm('Deployer', 'deployer')}</span><span class="val" style="font-size: 10px;">${deployer || '---'}</span></div>
                 </div>
             </div>
             <div style="font-size: 10px; color: var(--text-muted); text-align: right; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border);">
-                Xem thông tin token đã qua lọc
+                Token da vuot qua bo loc. Nhan "Cap nhat trang thai" de lam moi du lieu.
             </div>
         `;
 
         html += `</div>`;
         liveAnalysis.innerHTML = html;
+        hydrateTermAnnotations(liveAnalysis);
         return;
     }
 
@@ -796,7 +967,7 @@ function renderAnalysis(data) {
         html += `
             <div class="progress-bar-container">
                 <div class="progress-label">
-                    <span><span class="term-en" data-tooltip="Tiến độ đường cong giá trên pump.fun — 100% = token lên DEX">Bonding Curve</span></span>
+                    <span>${renderTerm('Bonding Curve', 'bondingCurve')}</span>
                     <span>${bondingProgress.toFixed(1)}%</span>
                 </div>
                 <div class="progress-bar">
@@ -810,18 +981,18 @@ function renderAnalysis(data) {
     html += `
         <div class="verdict-box ${isPassed ? 'pass' : 'fail'}">
             <i class="fas ${isPassed ? 'fa-check-double' : 'fa-shield-alt'}"></i>
-            <span>${ruleResult.summary || (isPassed ? 'Tất cả quy tắc đạt' : 'Bị chặn bởi quy tắc')}</span>
+            <span>${formatRichText(ruleResult.summary || (isPassed ? 'Tat ca quy tac deu dat.' : 'Bi chan boi bo quy tac.'))}</span>
 
             <button class="refresh-btn" id="refreshBtn" onclick="manualRefresh('${mint}')">
                 <i class="fas fa-sync-alt"></i>
-                <span>Cập nhật trạng thái</span>
+                <span>Cap nhat trang thai</span>
             </button>
         </div>
     `;
 
     // ── Rule Results ──
     if (ruleResult.results && ruleResult.results.length > 0) {
-        html += `<div class="section-title"><i class="fas fa-list-check"></i> Kết quả quy tắc (${ruleResult.results.filter(r => r.passed).length}/${ruleResult.results.length} đạt)</div>`;
+        html += `<div class="section-title"><i class="fas fa-list-check"></i> Ket qua bo quy tac (${ruleResult.results.filter((r) => r.passed).length}/${ruleResult.results.length} dat)</div>`;
         html += `<div class="rules-grid">`;
         for (const r of ruleResult.results) {
             const cls = r.passed ? 'pass' : (r.ruleType === 'INFO' ? 'info' : 'fail');
@@ -831,10 +1002,10 @@ function renderAnalysis(data) {
                     <i class="fas ${icon} rule-icon"></i>
                     <div class="rule-body">
                         <div class="rule-name">
-                            ${r.ruleName}
-                            <span class="rule-type-badge ${r.ruleType.toLowerCase()}">${r.ruleType}</span>
+                            ${getRuleDisplayName(r.ruleId, r.ruleName)}
+                            <span class="rule-type-badge ${r.ruleType.toLowerCase()}">${getRuleTypeLabel(r.ruleType)}</span>
                         </div>
-                        <div class="rule-reason">${r.reason}</div>
+                        <div class="rule-reason">${formatRichText(r.reason)}</div>
                     </div>
                 </div>
             `;
@@ -843,8 +1014,8 @@ function renderAnalysis(data) {
     } else if (ruleResult.isLegacy) {
         html += `
             <div style="padding: 20px; text-align: center; background: var(--bg-card); border-radius: var(--radius-md); border: 1px dashed var(--border); margin-bottom: 20px;">
-                <div style="font-size: 13px; color: var(--text-secondary); line-height: 1.6;">${ruleResult.summary}</div>
-                <div style="font-size: 11px; color: var(--text-muted); margin-top: 8px;">(Quét cũ — không có dữ liệu quy tắc chi tiết)</div>
+                <div style="font-size: 13px; color: var(--text-secondary); line-height: 1.6;">${formatRichText(ruleResult.summary)}</div>
+                <div style="font-size: 11px; color: var(--text-muted); margin-top: 8px;">(Ban ghi cu, chua co du lieu quy tac chi tiet)</div>
             </div>
         `;
     }
@@ -857,38 +1028,40 @@ function renderAnalysis(data) {
         html += `<div class="info-grid">`;
 
         // Dev Analysis Card
-        html += `<div class="info-card"><h4><i class="fas fa-user-shield"></i> Phân tích Dev</h4>`;
+        html += `<div class="info-card"><h4><i class="fas fa-user-shield"></i> Phan tich ${renderTerm('Dev', 'dev')}</h4>`;
         if (devData.address) {
             const riskColor = devData.riskScore >= 70 ? 'red' : devData.riskScore >= 40 ? 'yellow' : 'green';
+            const riskLevel = escapeHtml(devData.riskLevel || '---');
             html += `
-                <div class="info-row"><span class="label">Địa chỉ</span><span class="val" style="font-size: 10px;">${devData.address}</span></div>
-                <div class="info-row"><span class="label"><span class="term-en" data-tooltip="Điểm đánh giá mức độ rủi ro của dev (0=an toàn, 100=nguy hiểm)">Risk Score</span></span><span class="val ${riskColor}">${devData.riskScore}/100 (${devData.riskLevel})</span></div>
-                <div class="info-row"><span class="label">Số dư</span><span class="val">${(devData.balanceSol || 0).toFixed(3)} SOL</span></div>
-                <div class="info-row"><span class="label">Số giao dịch</span><span class="val">${devData.totalTxCount || 0}</span></div>
-                <div class="info-row"><span class="label">Token đã tạo</span><span class="val">${devData.tokensDeployed || 0}</span></div>
-                <div class="info-row"><span class="label">Tuổi ví</span><span class="val">${devData.walletAge || 0} ngày</span></div>
+                <div class="info-row"><span class="label">Dia chi</span><span class="val" style="font-size: 10px;">${escapeHtml(devData.address)}</span></div>
+                <div class="info-row"><span class="label">${renderTerm('Risk Score', 'riskScore')}</span><span class="val ${riskColor}">${devData.riskScore}/100 (${riskLevel})</span></div>
+                <div class="info-row"><span class="label">So du</span><span class="val">${(devData.balanceSol || 0).toFixed(3)} SOL</span></div>
+                <div class="info-row"><span class="label">So giao dich</span><span class="val">${devData.totalTxCount || 0}</span></div>
+                <div class="info-row"><span class="label">Token da tao</span><span class="val">${devData.tokensDeployed || 0}</span></div>
+                <div class="info-row"><span class="label">Tuoi vi</span><span class="val">${devData.walletAge || 0} ngay</span></div>
             `;
         } else if (data.devRiskScore !== undefined) {
-            html += `<div class="info-row"><span class="label"><span class="term-en" data-tooltip="Điểm đánh giá mức độ rủi ro của dev">Risk Score</span></span><span class="val">${data.devRiskScore}/100</span></div>`;
+            html += `<div class="info-row"><span class="label">${renderTerm('Risk Score', 'riskScore')}</span><span class="val">${data.devRiskScore}/100</span></div>`;
         } else {
-            html += `<div style="color: var(--text-muted); font-size: 11px;">Không có dữ liệu</div>`;
+            html += `<div style="color: var(--text-muted); font-size: 11px;">Chua co du lieu</div>`;
         }
         html += `</div>`;
 
         // Token Score Card
-        html += `<div class="info-card"><h4><i class="fas fa-star"></i> Token Score</h4>`;
+        html += `<div class="info-card"><h4><i class="fas fa-star"></i> ${renderTerm('Token Score', 'tokenScore')}</h4>`;
         if (tsData.totalScore !== undefined) {
             const scoreColor = tsData.totalScore >= 70 ? 'green' : tsData.totalScore >= 45 ? 'yellow' : 'red';
+            const verdict = escapeHtml(tsData.verdict || '---');
             html += `
-                <div class="info-row"><span class="label">Total Score</span><span class="val ${scoreColor}">${tsData.totalScore}/100 (${tsData.verdict})</span></div>
-                <div class="info-row"><span class="label">Metadata</span><span class="val">${tsData.metadataScore || 0}</span></div>
-                <div class="info-row"><span class="label">Bonding Curve</span><span class="val">${tsData.bondingCurveScore || 0}</span></div>
-                <div class="info-row"><span class="label">URI Score</span><span class="val">${tsData.uriScore || 0}</span></div>
+                <div class="info-row"><span class="label">Tong diem</span><span class="val ${scoreColor}">${tsData.totalScore}/100 (${verdict})</span></div>
+                <div class="info-row"><span class="label">${renderTerm('Metadata', 'metadata')}</span><span class="val">${tsData.metadataScore || 0}</span></div>
+                <div class="info-row"><span class="label">${renderTerm('Bonding Curve', 'bondingCurve')}</span><span class="val">${tsData.bondingCurveScore || 0}</span></div>
+                <div class="info-row"><span class="label">${renderTerm('URI Score', 'uriScore')}</span><span class="val">${tsData.uriScore || 0}</span></div>
             `;
         } else if (data.tokenScore !== undefined && typeof data.tokenScore === 'number') {
-            html += `<div class="info-row"><span class="label">Score</span><span class="val">${data.tokenScore}/100</span></div>`;
+            html += `<div class="info-row"><span class="label">Diem</span><span class="val">${data.tokenScore}/100</span></div>`;
         } else {
-            html += `<div style="color: var(--text-muted); font-size: 11px;">No data</div>`;
+            html += `<div style="color: var(--text-muted); font-size: 11px;">Chua co du lieu</div>`;
         }
         html += `</div>`;
 
@@ -897,40 +1070,45 @@ function renderAnalysis(data) {
 
     // ── Holder Stats ──
     if (holderStats) {
-        html += `<div class="section-title"><i class="fas fa-users"></i> Holder Distribution</div>`;
+        html += `<div class="section-title"><i class="fas fa-users"></i> Phan bo ${renderTerm('Holder', 'holder')}</div>`;
         html += `<div class="info-grid">`;
 
-        html += `<div class="info-card"><h4><i class="fas fa-chart-pie"></i> Concentration (% supply, trừ pool)</h4>`;
+        html += `<div class="info-card"><h4><i class="fas fa-chart-pie"></i> Do tap trung (% cung, tru pool)</h4>`;
         const t10Color = holderStats.top10Percent > 30 ? 'red' : holderStats.top10Percent > 20 ? 'yellow' : 'green';
         const devColor = holderStats.devHoldPercent > 20 ? 'red' : holderStats.devHoldPercent > 10 ? 'yellow' : 'green';
         const bundleColor = holderStats.bundleHoldPercent > 20 ? 'red' : 'green';
         const earlyBuyerColor = holderStats.earlyBuyerHoldPercent > 20 ? 'red' : 'green';
         html += `
-            <div class="info-row"><span class="label">Holder thật</span><span class="val">${holderStats.realHolderCount ?? 0}${typeof holderStats.filteredFunctionalCount === 'number' ? ` | Lọc: ${holderStats.filteredFunctionalCount}` : ''}</span></div>
-            <div class="info-row"><span class="label">Top 10</span><span class="val ${t10Color}">${holderStats.top10Percent?.toFixed(1)}%${typeof holderStats.top10OwnersPercent === 'number' ? ` | Owners: ${holderStats.top10OwnersPercent.toFixed(1)}%` : ''}</span></div>
-            <div class="info-row"><span class="label">Dev</span><span class="val ${devColor}">${holderStats.devHoldPercent?.toFixed(1)}%</span></div>
-            <div class="info-row"><span class="label">Bundle</span><span class="val ${bundleColor}">${holderStats.bundleHoldPercent?.toFixed(1)}%</span></div>
-            <div class="info-row"><span class="label">Snipers</span><span class="val ${earlyBuyerColor}">${holderStats.earlyBuyerHoldPercent?.toFixed(1)}%</span></div>
+            <div class="info-row"><span class="label">${renderTerm('Holder', 'holder')} thuc</span><span class="val">${holderStats.realHolderCount ?? 0}${typeof holderStats.filteredFunctionalCount === 'number' ? ` | Loc: ${holderStats.filteredFunctionalCount}` : ''}</span></div>
+            <div class="info-row"><span class="label">Top 10</span><span class="val ${t10Color}">${holderStats.top10Percent?.toFixed(1)}%${typeof holderStats.top10OwnersPercent === 'number' ? ` | Vi so huu: ${holderStats.top10OwnersPercent.toFixed(1)}%` : ''}</span></div>
+            <div class="info-row"><span class="label">${renderTerm('Dev', 'dev')}</span><span class="val ${devColor}">${holderStats.devHoldPercent?.toFixed(1)}%</span></div>
+            <div class="info-row"><span class="label">${renderTerm('Bundle', 'bundle')}</span><span class="val ${bundleColor}">${holderStats.bundleHoldPercent?.toFixed(1)}%</span></div>
+            <div class="info-row"><span class="label">${renderTerm('Early Buyers', 'earlyBuyers')}</span><span class="val ${earlyBuyerColor}">${holderStats.earlyBuyerHoldPercent?.toFixed(1)}%</span></div>
         `;
         html += `</div>`;
 
         // Cluster info
-        html += `<div class="info-card"><h4><i class="fas fa-project-diagram"></i> Cluster Analysis</h4>`;
+        html += `<div class="info-card"><h4><i class="fas fa-project-diagram"></i> Phan tich ${renderTerm('Cluster', 'cluster')}</h4>`;
         if (clusterAnalysis) {
             const clRisk = clusterAnalysis.riskLevel;
             const clColor = clRisk === 'HIGH' ? 'red' : clRisk === 'MEDIUM' ? 'yellow' : 'green';
             const sharedCount = clusterAnalysis.sharedFunders?.length || 0;
             const isWinnerSignal = sharedCount >= 3;
+            const clRiskLabel = clRisk === 'HIGH'
+                ? 'CAO'
+                : clRisk === 'MEDIUM'
+                    ? 'TRUNG BINH'
+                    : 'THAP';
             
             html += `
-                <div class="info-row"><span class="label">Winner Signal</span><span class="val ${isWinnerSignal ? 'green' : 'yellow'}" style="font-weight:700">${isWinnerSignal ? '✅ STRONG (x5+ Opt)' : 'WEAK'}</span></div>
-                <div class="info-row"><span class="label">Is Cluster</span><span class="val ${clusterAnalysis.isLikelyCluster ? 'red' : 'green'}">${clusterAnalysis.isLikelyCluster ? 'YES' : 'NO'}</span></div>
-                <div class="info-row"><span class="label">Risk Level</span><span class="val ${clColor}">${clRisk}</span></div>
-                <div class="info-row"><span class="label">Shared Funders</span><span class="val" style="font-weight:700">${sharedCount}</span></div>
-                <div class="info-row"><span class="label">White Wallets</span><span class="val">${clusterAnalysis.whiteWalletCount || 0}/${clusterAnalysis.walletCount || 0}</span></div>
+                <div class="info-row"><span class="label">Tin hieu thang</span><span class="val ${isWinnerSignal ? 'green' : 'yellow'}" style="font-weight:700">${isWinnerSignal ? 'MANH (x5+)' : 'CAN THEO DOI'}</span></div>
+                <div class="info-row"><span class="label">Co cluster</span><span class="val ${clusterAnalysis.isLikelyCluster ? 'red' : 'green'}">${clusterAnalysis.isLikelyCluster ? 'CO' : 'KHONG'}</span></div>
+                <div class="info-row"><span class="label">Muc rui ro</span><span class="val ${clColor}">${clRiskLabel}</span></div>
+                <div class="info-row"><span class="label">Vi me chung</span><span class="val" style="font-weight:700">${sharedCount}</span></div>
+                <div class="info-row"><span class="label">${renderTerm('White Wallet', 'whiteWallet')}</span><span class="val">${clusterAnalysis.whiteWalletCount || 0}/${clusterAnalysis.walletCount || 0}</span></div>
             `;
         } else {
-            html += `<div style="color: var(--text-muted); font-size: 11px;">No cluster data</div>`;
+            html += `<div style="color: var(--text-muted); font-size: 11px;">Chua co du lieu cluster</div>`;
         }
         html += `</div>`;
 
@@ -939,30 +1117,30 @@ function renderAnalysis(data) {
 
     // ── Early Buyers Table ──
     if (earlyBuyers && earlyBuyers.length > 0) {
-        html += `<div class="section-title"><i class="fas fa-wallet"></i> Early Buyers (${earlyBuyers.length})</div>`;
+        html += `<div class="section-title"><i class="fas fa-wallet"></i> ${renderTerm('Early Buyers', 'earlyBuyers')} (${earlyBuyers.length})</div>`;
         html += `
             <table class="buyers-table">
                 <thead>
                     <tr>
-                        <th>Wallet</th>
-                        <th>Bought</th>
-                        <th>Type</th>
-                        <th>Balance</th>
-                        <th>Age</th>
+                        <th>Vi</th>
+                        <th>Mua</th>
+                        <th>Loai</th>
+                        <th>So du</th>
+                        <th>Tuoi</th>
                         <th>TXs</th>
-                        <th>Source</th>
+                        <th>Nguon</th>
                     </tr>
                 </thead>
                 <tbody>
         `;
         for (const buyer of earlyBuyers) {
             const tagClass = buyer.isWhiteWallet ? 'white' : 'old';
-            const tagText = buyer.isWhiteWallet ? 'NEW' : 'OLD';
+            const tagText = buyer.isWhiteWallet ? 'MOI' : 'CU';
             const source = buyer.sourceOfFunds?.hasCEXFunding ? 'CEX' :
-                (buyer.fundingWallets?.length > 0 ? 'Wallet' : '---');
+                (buyer.fundingWallets?.length > 0 ? 'Vi' : '---');
             html += `
                 <tr>
-                    <td style="font-size: 10px; font-family: 'JetBrains Mono', monospace;">${buyer.address}</td>
+                    <td style="font-size: 10px; font-family: 'JetBrains Mono', monospace;">${escapeHtml(buyer.address)}</td>
                     <td style="font-weight: 700; color: var(--green); white-space: nowrap;">${(buyer.solAmount || 0).toFixed(2)} SOL</td>
                     <td><span class="wallet-tag ${tagClass}">${tagText}</span></td>
                     <td>${(buyer.balance || 0).toFixed(3)}</td>
@@ -978,13 +1156,14 @@ function renderAnalysis(data) {
     // ── Footer ──
     html += `
         <div style="font-size: 10px; color: var(--text-muted); text-align: right; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border);">
-            Analyzed at: ${timeStr} | Deployer: ${deployer}
+            Phan tich luc: ${timeStr} | ${renderTerm('Deployer', 'deployer')}: ${deployer || '---'}
         </div>
     `;
 
     html += `</div>`; // close detail-card
 
     liveAnalysis.innerHTML = html;
+    hydrateTermAnnotations(liveAnalysis);
 }
 
 // ═══════════════════════════════════════
