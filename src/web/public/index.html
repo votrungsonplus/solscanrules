@@ -308,6 +308,26 @@
                             </div>
                         </div>
 
+                        <!-- Rule Profiles -->
+                        <div class="config-section">
+                            <h3><i class="fas fa-layer-group"></i> Strategy Profile</h3>
+                            <div class="profile-card">
+                                <div class="profile-card-head">
+                                    <div>
+                                        <div class="profile-label">Active Profile</div>
+                                        <div class="profile-name-row">
+                                            <strong id="activeRuleProfileName">Loading...</strong>
+                                            <span id="activeRuleProfileBadge" class="config-badge">--</span>
+                                        </div>
+                                    </div>
+                                    <div id="activeRuleProfileHint" class="profile-hint">Preset chiến lược đang áp dụng cho Rules Engine.</div>
+                                </div>
+                                <div class="profile-actions" id="ruleProfilesContainer">
+                                    <div class="placeholder-text">Loading profiles...</div>
+                                </div>
+                            </div>
+                        </div>
+
                         <!-- Rules -->
                         <div class="config-section">
                             <div class="config-header-row">
@@ -328,6 +348,6 @@
     </div>
 
     <script src="/socket.io/socket.io.js"></script>
-    <script src="js/app.js?v=4"></script>
+    <script src="js/app.js?v=5"></script>
 </body>
 </html>

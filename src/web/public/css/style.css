@@ -1226,6 +1226,107 @@ body {
 
 .config-input:focus { border-color: var(--green); }
 
+.profile-card {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding: 14px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+}
+
+.profile-card-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 16px;
+}
+
+.profile-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-muted);
+    margin-bottom: 4px;
+}
+
+.profile-name-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.profile-name-row strong {
+    font-size: 16px;
+    color: var(--text-primary);
+}
+
+.profile-hint {
+    max-width: 360px;
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--text-secondary);
+    text-align: right;
+}
+
+.profile-actions {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 10px;
+}
+
+.profile-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+    width: 100%;
+    padding: 12px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--text-primary);
+    cursor: pointer;
+    transition: transform 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+    text-align: left;
+}
+
+.profile-btn:hover {
+    transform: translateY(-1px);
+    border-color: rgba(16, 185, 129, 0.35);
+    background: rgba(16, 185, 129, 0.08);
+}
+
+.profile-btn.active {
+    border-color: rgba(16, 185, 129, 0.45);
+    background: rgba(16, 185, 129, 0.12);
+}
+
+.profile-btn.custom {
+    border-style: dashed;
+}
+
+.profile-btn-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.profile-btn-id {
+    font-size: 10px;
+    color: var(--green);
+    font-family: var(--font-mono);
+    letter-spacing: 0.03em;
+}
+
+.profile-btn-desc {
+    font-size: 11px;
+    line-height: 1.45;
+    color: var(--text-secondary);
+}
+
 /* Rules list in settings */
 .rules-list {
     display: flex;
@@ -1289,6 +1390,17 @@ body {
     width: 78px;
     padding: 4px 8px;
     font-size: 11px;
+}
+
+@media (max-width: 768px) {
+    .profile-card-head {
+        flex-direction: column;
+    }
+
+    .profile-hint {
+        max-width: none;
+        text-align: left;
+    }
 }
 
 /* Toggle Switch */

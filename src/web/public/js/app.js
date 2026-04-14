@@ -12,6 +12,7 @@ const $$ = (sel) => document.querySelectorAll(sel);
 const tokenFeed = $('#tokenFeed');
 const liveAnalysis = $('#liveAnalysis');
 const rulesContainer = $('#rulesContainer');
+const ruleProfilesContainer = $('#ruleProfilesContainer');
 const passedTokensContainer = $('#passedTokensContainer');
 const refreshPassedBtn = $('#refreshPassedBtn');
 const top10Container = $('#top10Container');
@@ -41,6 +42,9 @@ const minBuyersToPassInput = $('#minBuyersToPassInput');
 const showAllBuyersToggle = $('#showAllBuyersToggle');
 const buySlippageInput = $('#buySlippageInput');
 const sellSlippageInput = $('#sellSlippageInput');
+const activeRuleProfileName = $('#activeRuleProfileName');
+const activeRuleProfileBadge = $('#activeRuleProfileBadge');
+const activeRuleProfileHint = $('#activeRuleProfileHint');
 const contractSearch = $('#contractSearch');
 const searchBtn = $('#searchBtn');
 const autoReloadSelect = $('#autoReloadSelect');
@@ -59,6 +63,8 @@ let solPrice = 0;
 let analyzedMints = new Set(); // Prevent double-counting scanned tokens
 let countedPasses = new Set(); // Prevent double-counting passed tokens
 let selectedMint = null; // Track currently viewing token to prevent auto-jump
+let currentRuleProfiles = [];
+let activeRuleProfile = 'custom';
 let autoReloadSeconds = DEFAULT_AUTO_RELOAD_SECONDS;
 let autoReloadDeadline = Date.now() + DEFAULT_AUTO_RELOAD_SECONDS * 1000;
 let autoReloadTimer = null;
@@ -210,6 +216,10 @@ socket.on('botStatus', (status) => {
     if (showAllBuyersToggle) showAllBuyersToggle.checked = status.showAllEarlyBuyers;
     if (buySlippageInput) buySlippageInput.value = status.buySlippage;
     if (sellSlippageInput) sellSlippageInput.value = status.sellSlippage;
+    if (status.activeRuleProfile) {
+        activeRuleProfile = status.activeRuleProfile;
+        renderRuleProfiles(currentRuleProfiles, activeRuleProfile);
+    }
     if (status.realWallet) {
         updateRealWallet(status.realWallet);
     }
@@ -1221,6 +1231,65 @@ function updateRealPositions(positions) {
 // ═══════════════════════════════════════
 // RULES
 // ═══════════════════════════════════════
+function renderRuleProfiles(profiles = [], activeProfileId = 'custom') {
+    if (!ruleProfilesContainer) return;
+
+    currentRuleProfiles = profiles;
+    activeRuleProfile = activeProfileId || 'custom';
+
+    const activeProfile = profiles.find((profile) => profile.id === activeRuleProfile);
+
+    if (activeRuleProfileName) {
+        activeRuleProfileName.textContent = activeProfile ? activeProfile.name : 'Custom';
+    }
+
+    if (activeRuleProfileBadge) {
+        activeRuleProfileBadge.textContent = activeProfile ? activeProfile.id : 'custom';
+        activeRuleProfileBadge.classList.toggle('active', activeRuleProfile !== 'custom');
+    }
+
+    if (activeRuleProfileHint) {
+        activeRuleProfileHint.textContent = activeProfile
+            ? activeProfile.description
+            : 'Preset đã bị vượt ra ngoài vì có chỉnh tay trên rules hoặc monitoring.';
+    }
+
+    ruleProfilesContainer.innerHTML = '';
+
+    const profileList = [...profiles];
+    if (!profileList.some((profile) => profile.id === 'custom')) {
+        profileList.push({
+            id: 'custom',
+            name: 'Custom',
+            description: 'Trạng thái hiện tại sau khi chỉnh tay. Áp lại preset để quay về cấu hình chuẩn.',
+        });
+    }
+
+    for (const profile of profileList) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = `profile-btn${profile.id === activeRuleProfile ? ' active' : ''}${profile.id === 'custom' ? ' custom' : ''}`;
+        btn.disabled = profile.id === 'custom';
+        btn.innerHTML = `
+            <span class="profile-btn-title">${profile.name}</span>
+            <span class="profile-btn-id">${profile.id}</span>
+            <span class="profile-btn-desc">${profile.description}</span>
+        `;
+
+        if (profile.id !== 'custom') {
+            btn.addEventListener('click', () => {
+                socket.emit('applyRuleProfile', profile.id);
+            });
+        }
+
+        ruleProfilesContainer.appendChild(btn);
+    }
+}
+
+socket.on('ruleProfiles', (payload) => {
+    renderRuleProfiles(payload?.profiles || [], payload?.activeRuleProfile || 'custom');
+});
+
 socket.on('rulesList', (rules) => {
     rulesContainer.innerHTML = '';
 
