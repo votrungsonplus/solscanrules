@@ -59,9 +59,9 @@ const settings = {
   // Performance & Execution
   performance: {
     tier: process.env.PERFORMANCE_TIER || 'PRO', // STANDARD, PRO, WARP
-    multiplexRPC: process.env.MULTIPLEX_RPC === 'true' || true,
+    multiplexRPC: process.env.MULTIPLEX_RPC !== 'false',
     maxConcurrentAnalysis: parseInt(process.env.MAX_CONCURRENT_ANALYSIS || '10'),
-    useOptimisticSend: process.env.OPTIMISTIC_SEND === 'true' || true,
+    useOptimisticSend: process.env.OPTIMISTIC_SEND !== 'false',
   },
 
   // Dynamic Fees

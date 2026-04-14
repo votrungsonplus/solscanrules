@@ -52,7 +52,7 @@ function shortenAddress(address, chars = 4) {
  * Format SOL amount
  */
 function formatSol(amount) {
-  return `${amount.toFixed(4)} SOL`;
+  return `${(amount || 0).toFixed(4)} SOL`;
 }
 
 /**

@@ -240,7 +240,8 @@ class SolanaConnection {
 
   async _waitForSlot(idx) {
     const stats = this._endpointStats[idx];
-    while (true) {
+    const deadline = Date.now() + 30000; // 30s safety timeout
+    while (Date.now() < deadline) {
       const now = Date.now();
       if (now - stats.lastRequestTime >= this._minSpacingMs && stats.inFlight < this._maxPerEndpoint) {
         stats.inFlight++;
@@ -249,6 +250,10 @@ class SolanaConnection {
       }
       await new Promise(r => setTimeout(r, 10));
     }
+    // Force acquire slot after timeout to prevent permanent hang
+    stats.inFlight++;
+    stats.lastRequestTime = Date.now();
+    logger.warn(`⚠️ _waitForSlot timeout for RPC #${idx + 1}, force-acquired slot (inFlight was ${stats.inFlight - 1})`);
   }
 
   _releaseSlot(idx) {

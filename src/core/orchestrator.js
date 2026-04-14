@@ -171,6 +171,9 @@ class Orchestrator extends EventEmitter {
     // 2. Initialize trade tracker (SQLite)
     tracker.init();
 
+    // 2.5. Load open positions from DB so TP/SL monitoring resumes after restart
+    sellExecutor.init();
+
     // 3. Load persistent settings from DB
     const savedRuleStates = tracker.getAllRuleStates();
     ruleEngine.loadStates(savedRuleStates);
@@ -1355,6 +1358,21 @@ class Orchestrator extends EventEmitter {
         this.tokenData.delete(mint);
         this.tokenEarlyBuyers.delete(mint);
         this.tokenGlobalFees.delete(mint);
+        this.holderStatsCache.delete(mint);
+      }
+    }
+
+    // Prune orphaned Set entries to prevent unbounded growth
+    // analyzedTokens/passedTokens can accumulate mints that were already removed from tokenData
+    const MAX_SET_SIZE = 500;
+    if (this.analyzedTokens.size > MAX_SET_SIZE) {
+      for (const mint of this.analyzedTokens) {
+        if (!this.tokenData.has(mint)) this.analyzedTokens.delete(mint);
+      }
+    }
+    if (this.passedTokens.size > MAX_SET_SIZE) {
+      for (const mint of this.passedTokens) {
+        if (!this.tokenData.has(mint)) this.passedTokens.delete(mint);
       }
     }
   }
@@ -1434,18 +1452,30 @@ class Orchestrator extends EventEmitter {
    * Execute sell order
    */
   async _executeSell(sellAction) {
-    const sellResult = await sellExecutor.sellToken(sellAction.mint, 100);
+    // Deduplication lock: prevent concurrent sells for the same mint
+    if (!this._sellingMints) this._sellingMints = new Set();
+    if (this._sellingMints.has(sellAction.mint)) {
+      logger.info(`⚠️ Sell already in progress for ${shortenAddress(sellAction.mint)}, skipping duplicate.`);
+      return;
+    }
+    this._sellingMints.add(sellAction.mint);
 
-    tracker.recordSell({
-      mint: sellAction.mint,
-      reason: sellAction.reason,
-      pnlSol: sellAction.pnlSol || 0,
-      pnlPercent: sellAction.pnlPercent,
-      signature: sellResult.signature,
-      timestamp: Date.now(),
-    });
+    try {
+      const sellResult = await sellExecutor.sellToken(sellAction.mint, 100);
 
-    await telegram.sendSellNotification(sellResult, sellAction.reason, sellAction.pnlPercent, sellAction.pnlSol);
+      tracker.recordSell({
+        mint: sellAction.mint,
+        reason: sellAction.reason,
+        pnlSol: sellAction.pnlSol || 0,
+        pnlPercent: sellAction.pnlPercent,
+        signature: sellResult.signature,
+        timestamp: Date.now(),
+      });
+
+      await telegram.sendSellNotification(sellResult, sellAction.reason, sellAction.pnlPercent, sellAction.pnlSol);
+    } finally {
+      this._sellingMints.delete(sellAction.mint);
+    }
   }
 
   /**
@@ -1484,7 +1514,7 @@ class Orchestrator extends EventEmitter {
         if (positions.length === 0) return '*Không có vị thế nào đang mở*';
         let text = `*📊 Vị thế đang mở (${positions.length})*\n\n`;
         for (const pos of positions) {
-          text += `\`${shortenAddress(pos.mint)}\` | Mua: ${formatSol(pos.buyPriceSol)}\n`;
+          text += `\`${shortenAddress(pos.mint)}\` | Mua: ${formatSol(pos.buyAmountSol || 0)}\n`;
         }
         return text;
       }
@@ -1955,8 +1985,8 @@ class Orchestrator extends EventEmitter {
       // 3. Sync database with latest MCap
       if (tokenData.marketCapUsd > 0) {
         tracker.updateCurrentMcap(mint, tokenData.marketCapUsd);
-        const scan = tracker.getScanForMint(mint);
-        if (tokenData.marketCapUsd > (scan?.highest_mcap_usd || 0)) {
+        const latestScan = tracker.getScanForMint(mint);
+        if (tokenData.marketCapUsd > (latestScan?.highest_mcap_usd || 0)) {
           tracker.updateHighestMcap(mint, tokenData.marketCapUsd, Date.now());
         }
       }
@@ -1988,7 +2018,7 @@ class Orchestrator extends EventEmitter {
   }
 
   _cleanup() {
-    const maxAge = 5 * 60 * 1000; // 5 minutes
+    const maxAge = (this._getMaxAgeMinutes() + 1) * 60 * 1000; // configurable + 1 min buffer
     const now = Date.now();
 
     for (const [mint, data] of this.tokenData) {

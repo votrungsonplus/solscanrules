@@ -818,7 +818,8 @@ class TradeTracker {
   getAllRuleStates() {
     if (!this.db) return {};
     try {
-      const settings = this.db.prepare(`SELECT key, value FROM bot_settings WHERE key LIKE 'rule_%'`).all();
+      // Only select toggle keys (value is 'true'/'false'), skip numeric param keys like rule_<id>_<param>
+      const settings = this.db.prepare(`SELECT key, value FROM bot_settings WHERE key LIKE 'rule_%' AND value IN ('true', 'false')`).all();
       const states = {};
       settings.forEach(s => {
         const ruleId = s.key.replace('rule_', '');

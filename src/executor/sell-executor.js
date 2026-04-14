@@ -200,11 +200,12 @@ class SellExecutor {
         lamports: jupTipLamports,
       });
 
+      const execConnection = solana.getExecutionConnection();
       let addressLookupTableAccounts = [];
       if (tx.message.addressTableLookups && tx.message.addressTableLookups.length > 0) {
         logger.debug('Fetching ALTs for Jupiter tip injection...');
         const altPromises = tx.message.addressTableLookups.map(async (lookup) => {
-          const res = await connection.getAddressLookupTable(lookup.accountKey);
+          const res = await execConnection.getAddressLookupTable(lookup.accountKey);
           return res.value;
         });
         const resolved = await Promise.all(altPromises);
@@ -215,7 +216,7 @@ class SellExecutor {
       message.instructions.push(tipInstruction);
       tx.message = message.compileToV0Message(addressLookupTableAccounts);
     }
-    
+
     tx.sign([wallet]);
 
     // 5. Submit to Fast Route
@@ -223,7 +224,7 @@ class SellExecutor {
     logger.debug(`Sending Jupiter-built transaction via Helius Sender...`);
     const signature = await solana.submitViaSender(rawTxBase64);
 
-    connection.confirmTransaction(signature, 'confirmed').catch(() => {});
+    solana.getExecutionConnection().confirmTransaction(signature, 'confirmed').catch(() => {});
     logger.info(`✅ Sell executed via Jupiter: ${signature}`);
     return signature;
   }
@@ -530,16 +531,6 @@ class SellExecutor {
   stopMonitoring(mint) {
     this.monitorIntervals.delete(mint);
     logger.debug(`Stopped monitoring: ${mint}`);
-  }
-
-  /**
-   * Get all active positions
-   */
-  getPositions() {
-    return [...this.positions.entries()].map(([mint, pos]) => ({
-      mint,
-      ...pos,
-    }));
   }
 
   getPositionCount() {
