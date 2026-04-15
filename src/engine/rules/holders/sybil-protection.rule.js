@@ -13,7 +13,7 @@ module.exports = () => ({
       return { passed: true, reason: '⚠️ Không đủ dữ liệu holder để xác định Sybil' };
     }
 
-    const min = ctx.rule?.minPercent || settings.rules.minPercentTop10 || 15;
+    const min = ctx.rule?.minPercent || settings.rules.minPercentTop10;
     const actual = holderStats.top10Percent;
     const passed = actual >= min;
 

@@ -37,8 +37,8 @@ module.exports = () => ({
     }
 
     const rule = ctx.rule || {};
-    const X = rule.checkFirstXBuyers || settings.rules.accumulationCheckFirstX || 5;
-    const Y = rule.maxAccumulationPercent || settings.rules.accumulationMaxPercent || 15;
+    const X = rule.checkFirstXBuyers || settings.rules.accumulationCheckFirstX;
+    const Y = rule.maxAccumulationPercent || settings.rules.accumulationMaxPercent;
     const includeBundle = rule.includeBundleAsNew !== undefined ? rule.includeBundleAsNew : true;
     const totalSupply = holderStats.supply;
 

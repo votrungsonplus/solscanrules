@@ -10,7 +10,7 @@ module.exports = () => ({
   evaluate: (ctx) => {
     const { tokenData } = ctx;
     const ageMinutes = (Date.now() - tokenData.timestamp) / 60000;
-    const max = ctx.rule?.maxMinutes || 5;
+    const max = ctx.rule?.maxMinutes || settings.rules.maxMinutes;
 
     return {
       passed: ageMinutes < max,

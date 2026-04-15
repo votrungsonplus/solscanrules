@@ -15,7 +15,7 @@ module.exports = () => ({
       return { passed: false, reason: 'Không phát hiện nhóm ví cùng nguồn (Cần tín hiệu cabal backing)' };
     }
 
-    const minFunders = ctx.rule?.minSharedFunders || settings.rules.minSharedFunders || 3;
+    const minFunders = ctx.rule?.minSharedFunders || settings.rules.minSharedFunders;
     const actualFunders = clusterAnalysis.sharedFunders.length;
     const isStrong = actualFunders >= minFunders;
 

@@ -10,7 +10,7 @@ module.exports = () => ({
   retryable: true,
   evaluate: (ctx) => {
     const { tokenData } = ctx;
-    const min = ctx.rule?.minMarketCapSol || settings.rules.minMarketCapSol || 10;
+    const min = ctx.rule?.minMarketCapSol || settings.rules.minMarketCapSol;
     const actual = tokenData.marketCapSol || 0;
     const passed = actual >= min;
 

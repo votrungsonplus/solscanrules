@@ -10,7 +10,7 @@ module.exports = () => ({
   evaluate: (ctx) => {
     const { earlyBuyers } = ctx;
     const count = earlyBuyers.length;
-    const min = ctx.rule?.minCount || settings.monitoring.minBuyersToPass || 5;
+    const min = ctx.rule?.minCount || settings.monitoring.minBuyersToPass;
 
     const passed = count >= min;
     return {

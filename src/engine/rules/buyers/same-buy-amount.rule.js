@@ -1,10 +1,12 @@
+const settings = require('../../../config/settings');
+
 module.exports = () => ({
   id: 'same_buy_amount',
   name: 'Same Buy Amount Detection',
   description: 'Phát hiện các ví mua cùng lượng SOL giống nhau (cabal signal)',
   enabled: true,
   type: 'ALERT',
-  tolerancePercent: 10,
+  tolerancePercent: settings.rules.tolerancePercent,
   evaluate: (ctx) => {
     const { earlyBuyerTrades, clusterAnalysis } = ctx;
     if (earlyBuyerTrades.length < 2) {
@@ -12,7 +14,7 @@ module.exports = () => ({
     }
 
     const amounts = earlyBuyerTrades.map((t) => t.solAmount);
-    const tolerance = (ctx.rule?.tolerancePercent || 10) / 100;
+    const tolerance = (ctx.rule?.tolerancePercent || settings.rules.tolerancePercent) / 100;
 
     const groups = [];
     for (let i = 0; i < amounts.length; i++) {

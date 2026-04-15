@@ -6,10 +6,10 @@ module.exports = () => ({
   description: 'Kiểm tra global fee đạt ngưỡng > 0.3 SOL',
   enabled: true,
   type: 'REQUIRE',
-  minGlobalFee: 0.3,
+  minGlobalFee: settings.rules.minGlobalFee,
   evaluate: (ctx) => {
     const { tokenData } = ctx;
-    const threshold = ctx.rule?.minGlobalFee || settings.rules.minGlobalFee || 0.3;
+    const threshold = ctx.rule?.minGlobalFee || settings.rules.minGlobalFee;
     const currentFee = tokenData.globalFee || (tokenData.volume ? tokenData.volume / 100 : 0);
 
     return {

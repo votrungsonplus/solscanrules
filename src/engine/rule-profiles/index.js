@@ -25,7 +25,7 @@ const PROFILE_DEFINITIONS = {
       dev_risk_check: { enabled: true, maxRiskScore: 50 },
       token_score_check: { enabled: false, minScore: 40 },
       bonding_curve_progress: { enabled: false, maxProgressPercent: 80 },
-      fresh_wallet_check: { enabled: false, maxFreshCount: 2 },
+
       new_wallet_accumulation: { enabled: true, checkFirstXBuyers: 5, maxAccumulationPercent: 10, includeBundleAsNew: true },
       first_7_buyers_hold_limit: { enabled: true, maxPercent: 25 },
       early_buyer_count_check: { enabled: true, minCount: 5 },
@@ -55,7 +55,7 @@ const PROFILE_DEFINITIONS = {
       dev_risk_check: { enabled: true, maxRiskScore: 60 },
       token_score_check: { enabled: false, minScore: 40 },
       bonding_curve_progress: { enabled: false, maxProgressPercent: 80 },
-      fresh_wallet_check: { enabled: false, maxFreshCount: 4 },
+
       new_wallet_accumulation: { enabled: true, checkFirstXBuyers: 5, maxAccumulationPercent: 15, includeBundleAsNew: true },
       first_7_buyers_hold_limit: { enabled: true, maxPercent: 25 },
       early_buyer_count_check: { enabled: true, minCount: 5 },
@@ -85,7 +85,7 @@ const PROFILE_DEFINITIONS = {
       dev_risk_check: { enabled: true, maxRiskScore: 60 },
       token_score_check: { enabled: false, minScore: 40 },
       bonding_curve_progress: { enabled: false, maxProgressPercent: 80 },
-      fresh_wallet_check: { enabled: false, maxFreshCount: 4 },
+
       new_wallet_accumulation: { enabled: true, checkFirstXBuyers: 5, maxAccumulationPercent: 20, includeBundleAsNew: true },
       first_7_buyers_hold_limit: { enabled: false, maxPercent: 25 },
       early_buyer_count_check: { enabled: false, minCount: 5 },

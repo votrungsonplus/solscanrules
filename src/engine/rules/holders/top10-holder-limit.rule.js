@@ -14,7 +14,7 @@ module.exports = () => ({
       return { passed: false, reason: '⚠️ Dữ liệu holder không hợp lệ hoặc không nhất quán' };
     }
 
-    const max = ctx.rule?.maxPercent || settings.rules.maxPercentTop10 || 30;
+    const max = ctx.rule?.maxPercent || settings.rules.maxPercentTop10;
     const actual = holderStats.top10Percent;
     const passed = actual < max;
     const ownersActual = holderStats.top10OwnersPercent;

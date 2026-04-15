@@ -11,7 +11,7 @@ module.exports = () => ({
     const { devAnalysis } = ctx;
     if (!devAnalysis) return { passed: true, reason: 'No dev analysis data' };
 
-    const maxScore = ctx.rule?.maxRiskScore || settings.rules.maxRiskScore || 60;
+    const maxScore = ctx.rule?.maxRiskScore || settings.rules.maxRiskScore;
     return {
       passed: devAnalysis.riskScore < maxScore,
       reason: devAnalysis.riskScore >= maxScore

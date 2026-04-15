@@ -10,7 +10,7 @@ module.exports = () => ({
   evaluate: (ctx) => {
     const { tokenData } = ctx;
     const actual = tokenData.volume || (tokenData.globalFee || 0) * 100;
-    const min = ctx.rule?.minVol || settings.rules.minVol || 30;
+    const min = ctx.rule?.minVol || settings.rules.minVol;
     const passed = actual >= min;
 
     return {

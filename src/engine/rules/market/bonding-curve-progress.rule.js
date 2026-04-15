@@ -11,7 +11,7 @@ module.exports = () => ({
     const { bondingCurveProgress } = ctx;
     if (bondingCurveProgress === undefined) return { passed: true, reason: 'No bonding curve data' };
 
-    const maxProgress = ctx.rule?.maxProgressPercent || settings.rules.maxProgressPercent || 80;
+    const maxProgress = ctx.rule?.maxProgressPercent || settings.rules.maxProgressPercent;
     return {
       passed: bondingCurveProgress < maxProgress,
       reason: `Bonding curve: ${bondingCurveProgress.toFixed(1)}% (max: ${maxProgress}%)`,

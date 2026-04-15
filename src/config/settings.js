@@ -51,7 +51,8 @@ const settings = {
   monitoring: {
     earlyBuyersToMonitor: parseInt(process.env.EARLY_BUYERS_TO_MONITOR || '10'),
     minBuyersToPass: parseInt(process.env.MIN_BUYERS_TO_PASS || '5'),
-    globalFeeThreshold: parseFloat(process.env.GLOBAL_FEE_THRESHOLD || '0.5'),
+    // Dùng chung nguồn với rules.minGlobalFee — tránh phân mảnh
+    globalFeeThreshold: parseFloat(process.env.RULE_MIN_GLOBAL_FEE || process.env.GLOBAL_FEE_THRESHOLD || '0.3'),
     monitoringDuration: parseInt(process.env.MONITORING_DURATION || '300'), // 5 minutes to wait for 5 buyers
     showAllEarlyBuyers: process.env.SHOW_ALL_EARLY_BUYERS === 'true',
   },
@@ -89,7 +90,6 @@ const settings = {
     maxRiskScore: parseInt(process.env.RULE_MAX_RISK || '50'),
     minScore: parseInt(process.env.RULE_MIN_SCORE || '40'),
     maxProgressPercent: parseFloat(process.env.RULE_MAX_PROGRESS || '80'),
-    maxFreshCount: parseInt(process.env.RULE_MAX_FRESH || '2'),
     maxPercentFirst7Buyers: parseFloat(process.env.RULE_MAX_PCT_7_BUYERS || '25'),
     tolerancePercent: parseFloat(process.env.RULE_TOLERANCE_PCT || '10'),
     // New Wallet Accumulation rule

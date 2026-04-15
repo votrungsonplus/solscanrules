@@ -11,7 +11,7 @@ module.exports = () => ({
     const { tokenScore } = ctx;
     if (!tokenScore) return { passed: true, reason: 'No token score data' };
 
-    const minScore = ctx.rule?.minScore || settings.rules.minScore || 40;
+    const minScore = ctx.rule?.minScore || settings.rules.minScore;
     return {
       passed: tokenScore.totalScore >= minScore,
       reason: `Token score: ${tokenScore.totalScore}/100 (${tokenScore.verdict})`,

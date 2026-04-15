@@ -20,7 +20,7 @@ module.exports = () => ({
     const first7 = earlyBuyerTrades.slice(0, 7);
     const totalTokens = first7.reduce((sum, t) => sum + (t.tokenAmount || 0), 0);
     const actualPercent = (totalTokens / totalSupply) * 100;
-    const max = ctx.rule?.maxPercent || settings.rules.maxPercentFirst7Buyers || 25;
+    const max = ctx.rule?.maxPercent || settings.rules.maxPercentFirst7Buyers;
 
     const passed = actualPercent <= max;
     return {

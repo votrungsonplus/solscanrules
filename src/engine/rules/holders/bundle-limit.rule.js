@@ -6,7 +6,7 @@ module.exports = () => ({
   description: 'Bundle phải < 20% total supply',
   enabled: true,
   type: 'REQUIRE',
-  maxPercent: 20,
+  maxPercent: settings.rules.maxPercentBundle,
   evaluate: (ctx) => {
     const { holderStats } = ctx;
     if (!holderStats) return { passed: false, reason: '⚠️ Không có dữ liệu holder để đánh giá Bundle' };
@@ -14,7 +14,7 @@ module.exports = () => ({
       return { passed: false, reason: '⚠️ Dữ liệu holder không hợp lệ' };
     }
 
-    const max = ctx.rule?.maxPercent || settings.rules.maxPercentBundle || 20;
+    const max = ctx.rule?.maxPercent || settings.rules.maxPercentBundle;
     const actual = holderStats.bundleHoldPercent;
     const passed = actual < max;
     return {

@@ -6,7 +6,7 @@ module.exports = () => ({
   description: 'Dev hold phải < 20% total supply',
   enabled: true,
   type: 'REQUIRE',
-  maxPercent: 20,
+  maxPercent: settings.rules.maxPercentDev,
   evaluate: (ctx) => {
     const { holderStats } = ctx;
     if (!holderStats) return { passed: false, reason: '⚠️ Không có dữ liệu holder để đánh giá Dev Hold' };
@@ -14,7 +14,7 @@ module.exports = () => ({
       return { passed: false, reason: '⚠️ Dữ liệu holder không hợp lệ' };
     }
 
-    const max = ctx.rule?.maxPercent || settings.rules.maxPercentDev || 20;
+    const max = ctx.rule?.maxPercent || settings.rules.maxPercentDev;
     const actual = holderStats.devHoldPercent;
     const passed = actual < max;
     return {
