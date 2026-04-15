@@ -130,16 +130,16 @@ class TokenScorer {
 
     let score = 50; // Start neutral
 
-    const whiteWalletCount = earlyBuyers.filter(b => b.isWhiteWallet).length;
-    const whiteWalletRatio = whiteWalletCount / earlyBuyers.length;
+    const freshNewWalletCount = earlyBuyers.filter(b => b.isFreshNewWallet).length;
+    const freshNewWalletRatio = freshNewWalletCount / earlyBuyers.length;
     const cexFundedCount = earlyBuyers.filter(b => b.sourceOfFunds?.hasCEXFunding).length;
     const avgAge = earlyBuyers.reduce((sum, b) => sum + (b.walletAgeDays || 0), 0) / earlyBuyers.length;
     const avgTxCount = earlyBuyers.reduce((sum, b) => sum + (b.txCount || 0), 0) / earlyBuyers.length;
 
-    // Too many white wallets = suspicious
-    if (whiteWalletRatio > 0.7) score -= 25;
-    else if (whiteWalletRatio > 0.5) score -= 15;
-    else if (whiteWalletRatio < 0.3) score += 10;
+    // Quá nhiều ví mới = đáng ngờ
+    if (freshNewWalletRatio > 0.7) score -= 25;
+    else if (freshNewWalletRatio > 0.5) score -= 15;
+    else if (freshNewWalletRatio < 0.3) score += 10;
 
     // CEX funded buyers = organic signal
     if (cexFundedCount >= 2) score += 15;

@@ -1105,7 +1105,7 @@ function renderAnalysis(data) {
                 <div class="info-row"><span class="label">Có ${renderTerm('Cluster', 'cluster')}</span><span class="val ${clusterAnalysis.isLikelyCluster ? 'red' : 'green'}">${clusterAnalysis.isLikelyCluster ? 'CÓ' : 'KHÔNG'}</span></div>
                 <div class="info-row"><span class="label">Mức rủi ro</span><span class="val ${clColor}">${clRiskLabel}</span></div>
                 <div class="info-row"><span class="label">Ví mẹ chung</span><span class="val" style="font-weight:700">${sharedCount}</span></div>
-                <div class="info-row"><span class="label">${renderTerm('White Wallet', 'whiteWallet')}</span><span class="val">${clusterAnalysis.whiteWalletCount || 0}/${clusterAnalysis.walletCount || 0}</span></div>
+                <div class="info-row"><span class="label">Ví mới trong cluster</span><span class="val">${clusterAnalysis.freshNewWalletCount || 0}/${clusterAnalysis.walletCount || 0}</span></div>
             `;
         } else {
             html += `<div style="color: var(--text-muted); font-size: 11px;">Chưa có dữ liệu ${renderTerm('Cluster', 'cluster')}</div>`;
@@ -1134,8 +1134,8 @@ function renderAnalysis(data) {
                 <tbody>
         `;
         for (const buyer of earlyBuyers) {
-            const tagClass = buyer.isWhiteWallet ? 'white' : 'old';
-            const tagText = buyer.isWhiteWallet ? 'MỚI' : 'CŨ';
+            const tagClass = buyer.isFreshNewWallet ? 'white' : 'old';
+            const tagText = buyer.isFreshNewWallet ? 'MỚI' : 'CŨ';
             const source = buyer.sourceOfFunds?.hasCEXFunding ? 'CEX' :
                 (buyer.fundingWallets?.length > 0 ? 'Ví' : '---');
             html += `

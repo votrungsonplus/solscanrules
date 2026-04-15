@@ -42,26 +42,23 @@ Hệ thống có **19 rules** (18 cũ + 1 mới), chia thành 4 loại:
 
 ---
 
-## 2. VẤN ĐỀ PHÂN MẢNH ĐỊNH NGHĨA "VÍ MỚI" (ĐÃ SỬA)
+## 2. ĐỊNH NGHĨA "VÍ MỚI" — ĐÃ THỐNG NHẤT HOÀN TOÀN
 
-### Trước khi sửa — 3 định nghĩa khác nhau:
+### Trước — 3 định nghĩa khác nhau (đã XOÁ):
 
-| Nơi | Điều kiện | Vấn đề |
-|-----|-----------|--------|
-| `wallet-analyzer.js` → `isNewWallet` | txCount < 20 HOẶC age < 7 ngày | Quá lỏng, hầu hết ví đều match |
-| `wallet-analyzer.js` → `isWhiteWallet` | txCount <= 5 VÀ age < 7 ngày VÀ 1 funding source | Dùng cho mục đích khác (cluster) |
-| `fresh-wallet-check.rule.js` | walletAgeDays < 1 VÀ firstTx trong 2h | Không check số tx |
+| Biến | Điều kiện | Vấn đề |
+|------|-----------|--------|
+| ~~`isNewWallet`~~ | txCount < 20 HOẶC age < 7 ngày | Quá lỏng, gần như mọi ví đều match |
+| ~~`isWhiteWallet`~~ | txCount <= 5 VÀ age < 7 ngày VÀ 1 funding source | Tiêu chí lệch, không nhất quán |
+| ~~`fresh-wallet-check` (cũ)~~ | walletAgeDays < 1 VÀ firstTx trong 2h | Không check số tx |
 
-### Sau khi sửa — Định nghĩa thống nhất:
+### Sau — 1 định nghĩa duy nhất:
 
 ```
 isFreshNewWallet = (tuổi ví < 10 tiếng) VÀ (số giao dịch < 5)
 ```
 
-- **File**: `wallet-analyzer.js` dòng 65-68
-- **Dùng ở**: `new-wallet-accumulation.rule.js`, `fresh-wallet-check.rule.js` (legacy)
-- **isNewWallet** vẫn giữ lại (txCount < 20 || age < 7 ngày) để quyết định có fetch funding data hay không (tối ưu RPC)
-- **isWhiteWallet** không thay đổi — phục vụ cluster detection, không liên quan
+Dùng **thống nhất** ở mọi nơi: wallet-analyzer, tất cả rules, token-scorer, frontend.
 
 ---
 

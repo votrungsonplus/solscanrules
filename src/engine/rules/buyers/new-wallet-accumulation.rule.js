@@ -59,14 +59,8 @@ module.exports = () => ({
     const walletDetails = firstXBuyers.map((buyer) => {
       const isBundle = bundleSet.has(buyer.address);
 
-      // Dùng isFreshNewWallet (định nghĩa thống nhất: < 10h tuổi + < 5 tx)
+      // isFreshNewWallet: định nghĩa duy nhất — tuổi < 10h VÀ < 5 tx
       let isNew = buyer.isFreshNewWallet === true;
-
-      // Fallback nếu isFreshNewWallet chưa được tính (tương thích ngược)
-      if (buyer.isFreshNewWallet === undefined) {
-        const ageSeconds = buyer.walletAgeSeconds || (buyer.firstTxTimestamp ? (Date.now() / 1000 - buyer.firstTxTimestamp) : null);
-        isNew = (ageSeconds !== null && ageSeconds < 10 * 3600) && (buyer.txCount || 0) < 5;
-      }
 
       // Nếu là ví bundle và toggle bật → coi là ví mới
       if (isBundle && includeBundle) {

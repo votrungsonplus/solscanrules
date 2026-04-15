@@ -22,13 +22,8 @@ module.exports = () => ({
       return { passed: true, reason: 'Chưa đủ buyer để đánh giá' };
     }
 
-    // Dùng định nghĩa thống nhất isFreshNewWallet (< 10h tuổi + < 5 tx)
-    const freshWallets = earlyBuyers.filter((buyer) => {
-      if (buyer.isFreshNewWallet !== undefined) return buyer.isFreshNewWallet;
-      // Fallback tương thích ngược
-      const ageSeconds = buyer.walletAgeSeconds || (buyer.firstTxTimestamp ? (Date.now() / 1000 - buyer.firstTxTimestamp) : null);
-      return (ageSeconds !== null && ageSeconds < 10 * 3600) && (buyer.txCount || 0) < 5;
-    });
+    // isFreshNewWallet: định nghĩa duy nhất — tuổi < 10h VÀ < 5 tx
+    const freshWallets = earlyBuyers.filter((buyer) => buyer.isFreshNewWallet === true);
 
     const maxCount = ctx.rule?.maxFreshCount || settings.rules.maxFreshCount || 4;
 

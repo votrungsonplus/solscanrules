@@ -62,42 +62,32 @@ class WalletAnalyzer {
     const walletAgeSeconds = oldestTx ? Date.now() / 1000 - oldestTx.blockTime : null;
     const walletAgeDays = walletAgeSeconds !== null ? Math.floor(walletAgeSeconds / 86400) : 0;
 
-    // === ĐỊNH NGHĨA THỐNG NHẤT "VÍ MỚI" (dùng chung toàn hệ thống) ===
+    // === ĐỊNH NGHĨA DUY NHẤT "VÍ MỚI" — dùng thống nhất toàn hệ thống ===
     // Ví mới = tuổi < 10 tiếng VÀ < 5 giao dịch
-    // Ví "cần phân tích sâu" = txCount < 20 hoặc age < 7 ngày (giữ lại để quyết định có fetch funding hay không)
     const isFreshNewWallet = (walletAgeSeconds !== null && walletAgeSeconds < 10 * 3600) && txCount < 5;
-    const isNewWallet = isFreshNewWallet || txCount < 20 || (walletAgeSeconds !== null && walletAgeSeconds < 7 * 86400);
 
     let recentTxs = [];
     let fundingTxs = [];
     let sourceOfFunds = { incomingFrom: [], sources: [], hasCEXFunding: false, fundingSourceCount: 0 };
-    let isWhiteWallet = false;
     let recentTokensBought = [];
 
-    if (isNewWallet) {
-      // Ví mới: Lấy 5 tx mới nhất và 5 tx cũ nhất
-      // TỐI ƯU CỰC MẠNH: Tránh Double Fetch Transaction
+    if (isFreshNewWallet) {
+      // Chỉ fetch tx data cho ví mới toanh (< 10h, < 5 tx) — tiết kiệm RPC tối đa
       if (txCount <= 5) {
         recentTxs = await this._getTransactionsFromSigs(signatures);
-        fundingTxs = recentTxs; // Dùng chung mảng, tiết kiệm 50% RPC
+        fundingTxs = recentTxs;
       } else {
         const recentSigs = signatures.slice(0, 5);
         const oldestSigs = signatures.slice(-5);
-        // Load song song
         [recentTxs, fundingTxs] = await Promise.all([
           this._getTransactionsFromSigs(recentSigs),
           this._getTransactionsFromSigs(oldestSigs)
         ]);
       }
-      
       sourceOfFunds = this._analyzeSourceOfFunds(pubkey, fundingTxs);
-      isWhiteWallet = this._checkWhiteWallet(txCount, walletAgeSeconds, sourceOfFunds);
       recentTokensBought = this._extractTokenBuys(recentTxs, walletAddress);
-    } else {
-      // Ví Cũ: Không đi tìm Nguồn tiền, cũng KHÔNG tốn RPC tải recentTxs. Cứu rỗi tốc độ cực mạnh!
-      sourceOfFunds = { incomingFrom: [], sources: [], hasCEXFunding: false, fundingSourceCount: 0 };
-      isWhiteWallet = false;
     }
+    // Ví cũ (>= 10h hoặc >= 5 tx): không tốn RPC, bỏ qua hoàn toàn
 
     // 4. Phân tích funding wallets (chỉ top 1 để tối tốc)
     const fundingWalletDetails = [];
@@ -107,26 +97,27 @@ class WalletAnalyzer {
       const funderAnalyses = await Promise.all(
         funders.map(async (funder) => {
           if (KNOWN_CEX_KEYS.includes(funder)) {
-            return { address: funder, txCount: 1000, ageDays: 1000, isWhiteWallet: false, label: 'CEX' };
+            return { address: funder, txCount: 1000, ageDays: 1000, isFreshNewWallet: false, label: 'CEX' };
           }
           try {
             const funderPubkey = new PublicKey(funder);
             const funderSigs = await this._getSignatures(funderPubkey, 5);
             const funderTxCount = funderSigs.length;
             const funderOldest = funderSigs.length > 0 ? funderSigs[funderSigs.length - 1] : null;
-            const funderAge = funderOldest ? Date.now() / 1000 - funderOldest.blockTime : 0;
-            const funderIsWhite = funderTxCount <= 5 && funderAge < 7 * 86400;
+            const funderAgeSeconds = funderOldest ? Date.now() / 1000 - funderOldest.blockTime : null;
+            // Dùng cùng tiêu chí isFreshNewWallet: tuổi < 10h VÀ tx < 5
+            const funderIsFresh = funderAgeSeconds !== null && funderAgeSeconds < 10 * 3600 && funderTxCount < 5;
 
             return {
               address: funder,
               txCount: funderTxCount,
-              ageDays: Math.floor(funderAge / 86400),
-              isWhiteWallet: funderIsWhite,
-              label: funderIsWhite ? 'Ví mới' : 'Ví cũ',
+              ageDays: funderAgeSeconds !== null ? Math.floor(funderAgeSeconds / 86400) : -1,
+              isFreshNewWallet: funderIsFresh,
+              label: funderIsFresh ? 'Ví mới' : 'Ví cũ',
             };
           } catch (err) {
             logger.warn(`Funder analysis failed: ${err.message}`);
-            return { address: funder, txCount: -1, ageDays: -1, isWhiteWallet: false, label: 'Ví cũ' };
+            return { address: funder, txCount: -1, ageDays: -1, isFreshNewWallet: false, label: 'Ví cũ' };
           }
         })
       );
@@ -140,9 +131,8 @@ class WalletAnalyzer {
       walletAgeSeconds,
       txCount,
       sourceOfFunds,
-      isWhiteWallet,
       isFreshNewWallet,
-      label: isWhiteWallet ? 'Ví mới' : 'Ví cũ',
+      label: isFreshNewWallet ? 'Ví mới' : 'Ví cũ',
       fundingWallets: sourceOfFunds.incomingFrom || [],
       fundingWalletDetails,
       recentTokensBought,
@@ -230,7 +220,7 @@ class WalletAnalyzer {
         return {
           address,
           sharedBy: count,
-          isWhiteWallet: detail.isWhiteWallet || false,
+          isFreshNewWallet: detail.isFreshNewWallet || false,
           label: detail.label || 'Ví cũ',
           txCount: detail.txCount ?? -1,
           ageDays: detail.ageDays ?? -1,
@@ -248,17 +238,17 @@ class WalletAnalyzer {
       return diff < 0.3;
     });
 
-    const whiteWalletCount = analyses.filter((a) => a.isWhiteWallet).length;
+    const freshNewWalletCount = analyses.filter((a) => a.isFreshNewWallet).length;
 
     return {
       walletCount: analyses.length,
       sharedFunders,
       similarAge,
       similarBalance,
-      whiteWalletCount,
-      whiteWalletRatio: analyses.length ? whiteWalletCount / analyses.length : 0,
-      isLikelyCluster: sharedFunders.length > 0 || (similarAge && similarBalance && whiteWalletCount > 1),
-      riskLevel: this._calculateClusterRisk(sharedFunders, similarAge, similarBalance, whiteWalletCount, analyses.length),
+      freshNewWalletCount,
+      freshNewWalletRatio: analyses.length ? freshNewWalletCount / analyses.length : 0,
+      isLikelyCluster: sharedFunders.length > 0 || (similarAge && similarBalance && freshNewWalletCount > 1),
+      riskLevel: this._calculateClusterRisk(sharedFunders, similarAge, similarBalance, freshNewWalletCount, analyses.length),
       wallets: analyses,
     };
   }
@@ -337,11 +327,6 @@ class WalletAnalyzer {
     };
   }
 
-  _checkWhiteWallet(txCount, walletAgeSeconds, sourceOfFunds) {
-    const isNew = walletAgeSeconds === null || walletAgeSeconds < 7 * 86400;
-    return txCount <= 5 && isNew && sourceOfFunds.fundingSourceCount <= 1;
-  }
-
   _extractTokenBuys(transactions, walletAddress) {
     const buys = [];
     for (const tx of transactions) {
@@ -381,13 +366,13 @@ class WalletAnalyzer {
     return buys;
   }
 
-  _calculateClusterRisk(sharedFunders, similarAge, similarBalance, whiteWalletCount, totalWallets) {
+  _calculateClusterRisk(sharedFunders, similarAge, similarBalance, freshNewWalletCount, totalWallets) {
     let score = 0;
     if (sharedFunders.length > 0) score += 30;
     if (sharedFunders.length > 2) score += 20;
     if (similarAge) score += 15;
     if (similarBalance) score += 15;
-    if (totalWallets > 0 && whiteWalletCount / totalWallets > 0.5) score += 20;
+    if (totalWallets > 0 && freshNewWalletCount / totalWallets > 0.5) score += 20;
 
     if (score >= 60) return 'HIGH';
     if (score >= 30) return 'MEDIUM';
