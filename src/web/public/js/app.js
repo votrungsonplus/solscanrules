@@ -832,7 +832,7 @@ socket.on('initialScans', (scans) => {
 });
 
 function renderAnalysis(data) {
-    const { tokenData, ruleResult, devAnalysis, tokenScore, holderStats, clusterAnalysis, earlyBuyers, globalFee } = data;
+    const { tokenData, ruleResult, devAnalysis, tokenScore, holderStats, clusterAnalysis, earlyBuyers, earlyBuyerTrades, globalFee } = data;
 
     if (!tokenData || !ruleResult) return;
 
@@ -1108,6 +1108,26 @@ function renderAnalysis(data) {
                 <div class="info-row"><span class="label">Ví mẹ chung</span><span class="val" style="font-weight:700">${sharedCount}</span></div>
                 <div class="info-row"><span class="label">Ví mới trong cluster</span><span class="val">${clusterAnalysis.freshNewWalletCount || 0}/${clusterAnalysis.walletCount || 0}</span></div>
             `;
+
+            // Show shared funder addresses (detailed)
+            if (clusterAnalysis.sharedFunders && clusterAnalysis.sharedFunders.length > 0) {
+                html += `<div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border);">
+                    <div style="font-size: 10px; color: var(--text-muted); margin-bottom: 4px;">Ví mẹ chung:</div>`;
+                for (const funder of clusterAnalysis.sharedFunders.slice(0, 5)) {
+                    const fAddr = typeof funder === 'string' ? funder : (funder.address || funder.wallet || '');
+                    const fCount = typeof funder === 'object' ? (funder.count || funder.fundedCount || '') : '';
+                    if (fAddr) {
+                        html += `<div style="font-size: 9px; font-family: 'JetBrains Mono', monospace; color: var(--text-secondary); margin: 2px 0;">
+                            <a href="https://solscan.io/account/${encodeURIComponent(fAddr)}" target="_blank" rel="noreferrer" style="color: var(--yellow); text-decoration: none;">${escapeHtml(fAddr)}</a>
+                            ${fCount ? `<span style="color: var(--text-muted);"> (cấp vốn ${fCount} ví)</span>` : ''}
+                        </div>`;
+                    }
+                }
+                if (clusterAnalysis.sharedFunders.length > 5) {
+                    html += `<div style="font-size: 9px; color: var(--text-muted);">... và ${clusterAnalysis.sharedFunders.length - 5} ví mẹ khác</div>`;
+                }
+                html += `</div>`;
+            }
         } else {
             html += `<div style="color: var(--text-muted); font-size: 11px;">Chưa có dữ liệu ${renderTerm('Cluster', 'cluster')}</div>`;
         }
@@ -1116,41 +1136,66 @@ function renderAnalysis(data) {
         html += `</div>`; // close info-grid
     }
 
-    // ── Early Buyers Table ──
+    // ── Early Buyers Table (enhanced with trade details) ──
     if (earlyBuyers && earlyBuyers.length > 0) {
-        html += `<div class="section-title"><i class="fas fa-wallet"></i> ${renderTerm('Early Buyers', 'earlyBuyers')} (${earlyBuyers.length})</div>`;
+        // Build trade lookup map from earlyBuyerTrades
+        const tradeLookup = {};
+        if (earlyBuyerTrades && earlyBuyerTrades.length > 0) {
+            for (const t of earlyBuyerTrades) {
+                if (t.trader) tradeLookup[t.trader] = t;
+            }
+        }
+
+        const freshCount = earlyBuyers.filter(b => b.isFreshNewWallet).length;
+        const totalSolSpent = earlyBuyers.reduce((sum, b) => sum + (b.solAmount || 0), 0);
+
+        html += `<div class="section-title"><i class="fas fa-wallet"></i> ${renderTerm('Early Buyers', 'earlyBuyers')} (${earlyBuyers.length}) — <span style="color: var(--yellow);">${freshCount} ví mới</span> | Tổng: <span style="color: var(--green);">${totalSolSpent.toFixed(2)} SOL</span></div>`;
         html += `
             <table class="buyers-table">
                 <thead>
                     <tr>
+                        <th>#</th>
                         <th>Ví</th>
-                        <th>Đã mua</th>
+                        <th>SOL mua</th>
+                        <th>Token nhận</th>
                         <th>Loại</th>
                         <th>Số dư</th>
                         <th>Tuổi</th>
-                        <th>Giao dịch</th>
-                        <th>Nguồn</th>
+                        <th>TX</th>
+                        <th>Nguồn vốn</th>
                     </tr>
                 </thead>
                 <tbody>
         `;
-        for (const buyer of earlyBuyers) {
+        earlyBuyers.forEach((buyer, idx) => {
             const tagClass = buyer.isFreshNewWallet ? 'white' : 'old';
             const tagText = buyer.isFreshNewWallet ? 'MỚI' : 'CŨ';
-            const source = buyer.sourceOfFunds?.hasCEXFunding ? 'CEX' :
-                (buyer.fundingWallets?.length > 0 ? 'Ví' : '---');
+            const trade = tradeLookup[buyer.address];
+            const tokenAmount = buyer.tokenAmount || trade?.tokenAmount || 0;
+            const solAmount = buyer.solAmount || trade?.solAmount || 0;
+            const sig = trade?.signature || buyer.signature || '';
+            const sigShort = sig ? sig.substring(0, 8) + '...' : '';
+            const source = buyer.sourceOfFunds?.hasCEXFunding ? `<span style="color: var(--green);">CEX</span>` :
+                (buyer.fundingWallets?.length > 0 ? `<span title="${escapeHtml((buyer.fundingWallets || []).slice(0, 3).join(', '))}">Ví (${buyer.fundingWallets.length})</span>` : '<span style="color: var(--text-muted);">---</span>');
+            const solscanUrl = sig ? `https://solscan.io/tx/${encodeURIComponent(sig)}` : '';
+
             html += `
                 <tr>
-                    <td style="font-size: 10px; font-family: 'JetBrains Mono', monospace;">${escapeHtml(buyer.address)}</td>
-                    <td style="font-weight: 700; color: var(--green); white-space: nowrap;">${(buyer.solAmount || 0).toFixed(2)} SOL</td>
+                    <td style="color: var(--text-muted); font-size: 10px;">${idx + 1}</td>
+                    <td style="font-size: 10px; font-family: 'JetBrains Mono', monospace;">
+                        <a href="https://solscan.io/account/${encodeURIComponent(buyer.address)}" target="_blank" rel="noreferrer" style="color: var(--text-secondary); text-decoration: none;" title="${escapeHtml(buyer.address)}">${escapeHtml(buyer.address)}</a>
+                        ${sigShort ? `<div style="font-size: 9px; color: var(--text-muted); margin-top: 2px;"><a href="${solscanUrl}" target="_blank" rel="noreferrer" style="color: var(--text-muted);" title="Xem giao dịch trên Solscan"><i class="fas fa-external-link-alt" style="font-size: 8px;"></i> ${sigShort}</a></div>` : ''}
+                    </td>
+                    <td style="font-weight: 700; color: var(--green); white-space: nowrap;">${solAmount.toFixed(3)} SOL</td>
+                    <td style="white-space: nowrap; font-size: 11px;">${tokenAmount > 0 ? formatNumber(tokenAmount) : '---'}</td>
                     <td><span class="wallet-tag ${tagClass}">${tagText}</span></td>
                     <td>${(buyer.balance || 0).toFixed(3)}</td>
-                    <td>${buyer.walletAgeDays || 0}d</td>
+                    <td>${buyer.walletAgeDays !== undefined ? buyer.walletAgeDays + 'd' : (buyer.walletAgeSeconds ? Math.floor(buyer.walletAgeSeconds / 86400) + 'd' : '---')}</td>
                     <td>${buyer.txCount || 0}</td>
-                    <td>${source}</td>
+                    <td style="font-size: 11px;">${source}</td>
                 </tr>
             `;
-        }
+        });
         html += `</tbody></table>`;
     }
 
