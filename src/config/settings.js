@@ -92,6 +92,9 @@ const settings = {
     maxFreshCount: parseInt(process.env.RULE_MAX_FRESH || '2'),
     maxPercentFirst7Buyers: parseFloat(process.env.RULE_MAX_PCT_7_BUYERS || '25'),
     tolerancePercent: parseFloat(process.env.RULE_TOLERANCE_PCT || '10'),
+    // New Wallet Accumulation rule
+    accumulationCheckFirstX: parseInt(process.env.RULE_ACCUMULATION_CHECK_X || '5'),
+    accumulationMaxPercent: parseFloat(process.env.RULE_ACCUMULATION_MAX_PCT || '15'),
   },
 };
 

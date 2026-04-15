@@ -1135,6 +1135,7 @@ class Orchestrator extends EventEmitter {
         tokenScore,
         bondingCurveProgress,
         holderStats,
+        bundleWallets,
         settings,
       });
 

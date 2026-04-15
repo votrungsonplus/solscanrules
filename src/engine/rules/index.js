@@ -14,6 +14,7 @@ const devRiskCheckRule = require('./quality/dev-risk-check.rule');
 const tokenScoreCheckRule = require('./quality/token-score-check.rule');
 const bondingCurveProgressRule = require('./market/bonding-curve-progress.rule');
 const freshWalletCheckRule = require('./buyers/fresh-wallet-check.rule');
+const newWalletAccumulationRule = require('./buyers/new-wallet-accumulation.rule');
 const first7BuyersHoldLimitRule = require('./buyers/first-7-buyers-hold-limit.rule');
 const earlyBuyerCountCheckRule = require('./buyers/early-buyer-count-check.rule');
 
@@ -35,6 +36,7 @@ function buildDefaultRules() {
     tokenScoreCheckRule(),
     bondingCurveProgressRule(),
     freshWalletCheckRule(),
+    newWalletAccumulationRule(),
     first7BuyersHoldLimitRule(),
     earlyBuyerCountCheckRule(),
   ];

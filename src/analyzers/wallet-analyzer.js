@@ -62,7 +62,11 @@ class WalletAnalyzer {
     const walletAgeSeconds = oldestTx ? Date.now() / 1000 - oldestTx.blockTime : null;
     const walletAgeDays = walletAgeSeconds !== null ? Math.floor(walletAgeSeconds / 86400) : 0;
 
-    const isNewWallet = txCount < 20 || (walletAgeSeconds !== null && walletAgeSeconds < 7 * 86400);
+    // === ĐỊNH NGHĨA THỐNG NHẤT "VÍ MỚI" (dùng chung toàn hệ thống) ===
+    // Ví mới = tuổi < 10 tiếng VÀ < 5 giao dịch
+    // Ví "cần phân tích sâu" = txCount < 20 hoặc age < 7 ngày (giữ lại để quyết định có fetch funding hay không)
+    const isFreshNewWallet = (walletAgeSeconds !== null && walletAgeSeconds < 10 * 3600) && txCount < 5;
+    const isNewWallet = isFreshNewWallet || txCount < 20 || (walletAgeSeconds !== null && walletAgeSeconds < 7 * 86400);
 
     let recentTxs = [];
     let fundingTxs = [];
@@ -137,6 +141,7 @@ class WalletAnalyzer {
       txCount,
       sourceOfFunds,
       isWhiteWallet,
+      isFreshNewWallet,
       label: isWhiteWallet ? 'Ví mới' : 'Ví cũ',
       fundingWallets: sourceOfFunds.incomingFrom || [],
       fundingWalletDetails,

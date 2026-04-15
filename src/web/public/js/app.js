@@ -71,33 +71,33 @@ let autoReloadTimer = null;
 
 const TERM_TOOLTIPS = {
     pnl: 'Profit & Loss — Lợi hoặc lỗ của giao dịch hay danh mục.',
-    marketCap: 'Market Cap — Vốn hoa thi truong cua token.',
-    ath: 'All-Time High — Muc cao nhat token da dat duoc.',
-    volume: 'Volume — Khoi luong giao dich.',
-    globalFee: 'Tong phi giao dich, thuong xap xi Volume x 1%.',
-    bondingCurve: 'Bonding Curve — Tien do duong cong gia tren pump.fun; 100% la len DEX.',
-    riskScore: 'Risk Score — Diem danh gia muc do rui ro.',
-    tokenScore: 'Token Score — Diem danh gia chat luong token.',
-    metadata: 'Metadata — Thong tin mo ta cua token.',
-    uriScore: 'URI Score — Diem danh gia duong dan metadata.',
-    dev: 'Dev — Vi deployer hoac nguoi tao token.',
-    deployer: 'Deployer — Vi tao token.',
-    whiteWallet: 'White Wallet — Vi moi/sach, it lich su giao dich.',
-    cex: 'CEX — San giao dich tap trung.',
-    cluster: 'Cluster — Nhom vi co lien he nguon von hoac hanh vi.',
-    bundle: 'Bundle — Cum lenh/nhom vi di cung nhau.',
-    earlyBuyers: 'Early Buyers — Cac vi mua trong nhung giao dich dau tien cua token.',
-    holder: 'Holder — Vi dang nam giu token.',
-    mint: 'Mint — Dia chi token tren blockchain Solana.',
-    mcCirc: 'MC luu hanh — Von hoa tinh tren luong cung dang luu hanh.',
-    liveStatus: 'LIVE — Dang co du lieu thi truong moi va tiep tuc duoc cap nhat.',
-    autoBuy: 'Auto-Buy — Tu dong mua khi token vuot qua bo loc quy tac.',
-    autoSell: 'Auto-Sell — Tu dong ban khi cham Take Profit, Stop Loss hoac phat hien rug.',
-    slippage: 'Slippage — Do truot gia chap nhan khi khop lenh.',
-    takeProfit: 'Take Profit — Nguong loi nhuan de tu dong chot loi.',
-    stopLoss: 'Stop Loss — Nguong lo toi da de tu dong cat lo.',
-    sniper: 'Sniper — Mua/ban thu cong tuc thi theo dia chi mint.',
-    jitoBundle: 'Jito Bundle — Cach gui giao dich qua mang Jito de tang kha nang lenh duoc vao block va giam front-run.',
+    marketCap: 'Market Cap — Vốn hóa thị trường của token.',
+    ath: 'All-Time High — Mức cao nhất token đã đạt được.',
+    volume: 'Volume — Khối lượng giao dịch.',
+    globalFee: 'Tổng phí giao dịch, thường xấp xỉ Volume × 1%.',
+    bondingCurve: 'Bonding Curve — Tiến độ đường cong giá trên pump.fun; 100% là lên DEX.',
+    riskScore: 'Risk Score — Điểm đánh giá mức độ rủi ro.',
+    tokenScore: 'Token Score — Điểm đánh giá chất lượng token.',
+    metadata: 'Metadata — Thông tin mô tả của token.',
+    uriScore: 'URI Score — Điểm đánh giá đường dẫn metadata.',
+    dev: 'Dev — Ví deployer hoặc người tạo token.',
+    deployer: 'Deployer — Ví tạo token.',
+    whiteWallet: 'White Wallet — Ví mới/sạch, ít lịch sử giao dịch.',
+    cex: 'CEX — Sàn giao dịch tập trung (Binance, OKX, v.v.).',
+    cluster: 'Cluster — Nhóm ví có liên hệ nguồn vốn hoặc hành vi.',
+    bundle: 'Bundle — Cụm lệnh/nhóm ví đi cùng nhau.',
+    earlyBuyers: 'Early Buyers — Các ví mua trong những giao dịch đầu tiên của token.',
+    holder: 'Holder — Ví đang nắm giữ token.',
+    mint: 'Mint — Địa chỉ token trên blockchain Solana.',
+    mcCirc: 'MC lưu hành — Vốn hóa tính trên lượng cung đang lưu hành.',
+    liveStatus: 'LIVE — Đang có dữ liệu thị trường mới và tiếp tục được cập nhật.',
+    autoBuy: 'Auto-Buy — Tự động mua khi token vượt qua bộ lọc quy tắc.',
+    autoSell: 'Auto-Sell — Tự động bán khi chạm Take Profit, Stop Loss hoặc phát hiện rug.',
+    slippage: 'Slippage — Độ trượt giá chấp nhận khi khớp lệnh.',
+    takeProfit: 'Take Profit — Ngưỡng lợi nhuận để tự động chốt lời.',
+    stopLoss: 'Stop Loss — Ngưỡng lỗ tối đa để tự động cắt lỗ.',
+    sniper: 'Sniper — Mua/bán thủ công tức thì theo địa chỉ mint.',
+    jitoBundle: 'Jito Bundle — Cách gửi giao dịch qua mạng Jito để tăng khả năng lệnh được vào block và giảm front-run.',
 };
 
 function escapeHtml(value = '') {
@@ -156,69 +156,69 @@ function hydrateTermAnnotations(root = document) {
 
 const PROFILE_COPY = {
     strict_current: {
-        name: 'Gat - Logic hien tai',
-        description: 'Preset chat nhat, bam sat logic hien tai de uu tien loc sach.',
+        name: 'Gắt - Logic hiện tại',
+        description: 'Preset chặt nhất, bám sát logic hiện tại để ưu tiên lọc sạch.',
     },
     balanced_backup3: {
-        name: 'Can bang - Backup3',
-        description: 'Preset can bang, gan voi backup3 va la diem giua de so sanh cac chien luoc.',
+        name: 'Cân bằng - Backup3',
+        description: 'Preset cân bằng, gần với backup3 và là điểm giữa để so sánh các chiến lược.',
     },
     loose_backup2: {
-        name: 'Thoang - Backup2',
-        description: 'Preset de thoang hon de tang so keo, gan voi tinh than backup2.',
+        name: 'Thoáng - Backup2',
+        description: 'Preset dễ thoáng hơn để tăng số kèo, gần với tinh thần backup2.',
     },
     custom: {
-        name: 'Tuy chinh',
-        description: 'Trang thai hien tai sau khi chinh tay. Ap lai preset de quay ve cau hinh chuan.',
+        name: 'Tùy chỉnh',
+        description: 'Trạng thái hiện tại sau khi chỉnh tay. Áp lại preset để quay về cấu hình chuẩn.',
     },
 };
 
 const RULE_TYPE_LABELS = {
-    REQUIRE: 'BAT BUOC',
-    BLOCK: 'CHAN',
-    ALERT: 'CANH BAO',
-    INFO: 'TIN HIEU',
-    'PRE-SCAN': 'SO BO',
+    REQUIRE: 'BẮT BUỘC',
+    BLOCK: 'CHẶN',
+    ALERT: 'CẢNH BÁO',
+    INFO: 'TÍN HIỆU',
+    'PRE-SCAN': 'SƠ BỘ',
 };
 
 const RULE_COPY = {
-    white_wallet_from_deployer: `${renderTerm('White Wallet', 'whiteWallet')} tu ${renderTerm('Deployer', 'deployer')}`,
-    white_wallet_from_cex: `${renderTerm('White Wallet', 'whiteWallet')} tu ${renderTerm('CEX', 'cex')}`,
-    same_buy_amount: 'Phat hien mua cung luong',
-    global_fee_threshold: `${renderTerm('Global Fee', 'globalFee')} toi thieu`,
-    cluster_detection: `Phat hien ${renderTerm('Cluster', 'cluster')}`,
-    sybil_protection: 'Chong Sybil',
-    top10_holder_limit: `Gioi han Top 10 ${renderTerm('Holder', 'holder')}`,
-    dev_hold_limit: `${renderTerm('Dev', 'dev')} hold toi da`,
-    bundle_limit: `${renderTerm('Bundle', 'bundle')} toi da`,
-    volume_threshold: `${renderTerm('Volume', 'volume')} toi thieu`,
-    listing_age_limit: 'Gioi han tuoi niem yet',
-    market_cap_check: `${renderTerm('Market Cap', 'marketCap')} toi thieu`,
-    dev_risk_check: `${renderTerm('Risk Score', 'riskScore')} cua ${renderTerm('Dev', 'dev')}`,
-    token_score_check: `${renderTerm('Token Score', 'tokenScore')} toi thieu`,
-    bonding_curve_progress: `Tien do ${renderTerm('Bonding Curve', 'bondingCurve')}`,
-    fresh_wallet_check: 'Canh bao vi moi',
-    first_7_buyers_hold_limit: `Ty trong 7 ${renderTerm('Early Buyers', 'earlyBuyers')} dau`,
-    early_buyer_count_check: `So luong ${renderTerm('Early Buyers', 'earlyBuyers')}`,
-    preliminary_buyers: `Kiem tra ${renderTerm('Early Buyers', 'earlyBuyers')} so bo`,
-    preliminary_timeout: 'Het thoi gian theo doi',
-    analysis_error: 'Pipeline phan tich',
+    white_wallet_from_deployer: `${renderTerm('White Wallet', 'whiteWallet')} từ ${renderTerm('Deployer', 'deployer')}`,
+    white_wallet_from_cex: `${renderTerm('White Wallet', 'whiteWallet')} từ ${renderTerm('CEX', 'cex')}`,
+    same_buy_amount: 'Phát hiện mua cùng lượng',
+    global_fee_threshold: `${renderTerm('Global Fee', 'globalFee')} tối thiểu`,
+    cluster_detection: `Phát hiện ${renderTerm('Cluster', 'cluster')}`,
+    sybil_protection: 'Chống Sybil',
+    top10_holder_limit: `Giới hạn Top 10 ${renderTerm('Holder', 'holder')}`,
+    dev_hold_limit: `${renderTerm('Dev', 'dev')} hold tối đa`,
+    bundle_limit: `${renderTerm('Bundle', 'bundle')} tối đa`,
+    volume_threshold: `${renderTerm('Volume', 'volume')} tối thiểu`,
+    listing_age_limit: 'Giới hạn tuổi niêm yết',
+    market_cap_check: `${renderTerm('Market Cap', 'marketCap')} tối thiểu`,
+    dev_risk_check: `${renderTerm('Risk Score', 'riskScore')} của ${renderTerm('Dev', 'dev')}`,
+    token_score_check: `${renderTerm('Token Score', 'tokenScore')} tối thiểu`,
+    bonding_curve_progress: `Tiến độ ${renderTerm('Bonding Curve', 'bondingCurve')}`,
+    fresh_wallet_check: 'Cảnh báo ví mới',
+    first_7_buyers_hold_limit: `Tỷ trọng 7 ${renderTerm('Early Buyers', 'earlyBuyers')} đầu`,
+    early_buyer_count_check: `Số lượng ${renderTerm('Early Buyers', 'earlyBuyers')}`,
+    preliminary_buyers: `Kiểm tra ${renderTerm('Early Buyers', 'earlyBuyers')} sơ bộ`,
+    preliminary_timeout: 'Hết thời gian theo dõi',
+    analysis_error: 'Pipeline phân tích',
 };
 
 const RULE_PARAM_LABELS = {
-    tolerancePercent: 'Do lech cho phep (%)',
-    minGlobalFee: `${renderTerm('Global Fee', 'globalFee')} toi thieu (SOL)`,
-    maxPercent: 'Nguong toi da (%)',
-    minVol: `${renderTerm('Volume', 'volume')} toi thieu (SOL)`,
-    maxMinutes: 'Tuoi toi da (phut)',
-    minMarketCapSol: `${renderTerm('MC', 'marketCap')} toi thieu (SOL)`,
-    maxRiskScore: `${renderTerm('Risk Score', 'riskScore')} toi da`,
-    minScore: 'Diem toi thieu',
-    maxProgressPercent: `${renderTerm('Bonding Curve', 'bondingCurve')} toi da (%)`,
-    maxFreshCount: 'So vi moi toi da',
-    minSharedFunders: 'So vi me chung toi thieu',
-    minPercent: 'Nguong toi thieu (%)',
-    minCount: `So ${renderTerm('Early Buyers', 'earlyBuyers')} toi thieu`,
+    tolerancePercent: 'Độ lệch cho phép (%)',
+    minGlobalFee: `${renderTerm('Global Fee', 'globalFee')} tối thiểu (SOL)`,
+    maxPercent: 'Ngưỡng tối đa (%)',
+    minVol: `${renderTerm('Volume', 'volume')} tối thiểu (SOL)`,
+    maxMinutes: 'Tuổi tối đa (phút)',
+    minMarketCapSol: `${renderTerm('MC', 'marketCap')} tối thiểu (SOL)`,
+    maxRiskScore: `${renderTerm('Risk Score', 'riskScore')} tối đa`,
+    minScore: 'Điểm tối thiểu',
+    maxProgressPercent: `${renderTerm('Bonding Curve', 'bondingCurve')} tối đa (%)`,
+    maxFreshCount: 'Số ví mới tối đa',
+    minSharedFunders: 'Số ví mẹ chung tối thiểu',
+    minPercent: 'Ngưỡng tối thiểu (%)',
+    minCount: `Số ${renderTerm('Early Buyers', 'earlyBuyers')} tối thiểu`,
 };
 
 function getProfileCopy(profile) {
@@ -432,14 +432,14 @@ function createFeedItem(token) {
     item.dataset.timestamp = token.timestamp || Date.now();
 
     let statusClass = 'pending';
-    let statusText = 'DANG XU LY';
+    let statusText = 'ĐANG XỬ LÝ';
     if (token.status === 'ELIGIBLE' || token.status === 'PASS') {
         statusClass = 'pass';
-        statusText = 'DAT';
+        statusText = 'ĐẠT';
         item.dataset.status = 'pass';
     } else if (token.status === 'BLOCKED' || token.status === 'FAIL') {
         statusClass = 'fail';
-        statusText = 'LOAI';
+        statusText = 'LOẠI';
         item.dataset.status = 'fail';
     }
 
@@ -505,7 +505,7 @@ function updateFeedItemStatus(mint, status) {
 
     if (status === 'ELIGIBLE') {
         badge.className = 'feed-badge pass';
-        badge.textContent = 'DAT';
+        badge.textContent = 'ĐẠT';
         // Update passed counter (deduplicate)
         if (!countedPasses.has(mint)) {
             countedPasses.add(mint);
@@ -514,7 +514,7 @@ function updateFeedItemStatus(mint, status) {
         }
     } else {
         badge.className = 'feed-badge fail';
-        badge.textContent = 'LOAI';
+        badge.textContent = 'LOẠI';
     }
 
     applyFilter();
@@ -584,7 +584,7 @@ socket.on('tokenPriceUpdate', (data) => {
             // Update Top 10 specific PnL highlight (current)
             const highlightPnl = row.querySelector('.highlight-pnl.current');
             if (highlightPnl) {
-                highlightPnl.textContent = `Now: ${currentPnl >= 0 ? '+' : ''}${currentPnl}%`;
+                highlightPnl.textContent = `Hiện: ${currentPnl >= 0 ? '+' : ''}${currentPnl}%`;
                 highlightPnl.className = `highlight-pnl current ${currentPnl >= 0 ? 'up' : 'down'}`;
             }
         }
@@ -652,7 +652,7 @@ function requestPassedTokenInfo(tokenOrMint) {
             },
             ruleResult: {
                 shouldBuy: true,
-                summary: 'Thong tin token da qua loc',
+                summary: 'Thông tin token đã qua lọc',
                 results: []
             }
         });
@@ -860,7 +860,7 @@ function renderAnalysis(data) {
     html += `
         <div class="detail-header">
             <div class="detail-title">
-                <h3>${symbol} <span class="verdict-badge ${isPassed ? 'pass' : 'fail'}">${isPassed ? 'DAT' : 'LOAI'}</span></h3>
+                <h3>${symbol} <span class="verdict-badge ${isPassed ? 'pass' : 'fail'}">${isPassed ? 'ĐẠT' : 'LOẠI'}</span></h3>
                 <div style="font-size: 12px; color: var(--text-muted);">${name}</div>
                 <div class="detail-mint">
                     <span>${safeMint}</span>
@@ -922,37 +922,37 @@ function renderAnalysis(data) {
             : 0;
 
         html += `
-            <div class="section-title"><i class="fas fa-circle-info"></i> Thong tin token</div>
+            <div class="section-title"><i class="fas fa-circle-info"></i> Thông tin token</div>
             <div class="info-only-actions">
                 <button class="refresh-btn" id="refreshPassedInfoBtn" onclick="refreshPassedTokenInfo('${mint}')">
                     <i class="fas fa-rotate"></i>
-                    <span>Cap nhat trang thai</span>
+                    <span>Cập nhật trạng thái</span>
                 </button>
             </div>
             <div class="info-grid">
                 <div class="info-card">
-                    <h4><i class="fas fa-coins"></i> Anh chup thi truong</h4>
-                    <div class="info-row"><span class="label">${renderTerm('MC', 'marketCap')} luc qua loc</span><span class="val">${launchMcapUsd > 0 ? '$' + formatNumber(launchMcapUsd) : '---'}</span></div>
-                    <div class="info-row"><span class="label">${renderTerm('MC', 'marketCap')} hien tai</span><span class="val yellow">${currentMcapUsd > 0 ? '$' + formatNumber(currentMcapUsd) : '---'}</span></div>
-                    <div class="info-row"><span class="label">${renderTerm('MC', 'marketCap')} cao nhat</span><span class="val green">${highestMcapUsd > 0 ? '$' + formatNumber(highestMcapUsd) : '---'}</span></div>
-                    <div class="info-row"><span class="label">Hieu suat</span><span class="val ${performancePct >= 0 ? 'green' : 'red'}">${performancePct >= 0 ? '+' : ''}${performancePct.toFixed(1)}%</span></div>
+                    <h4><i class="fas fa-coins"></i> Ảnh chụp thị trường</h4>
+                    <div class="info-row"><span class="label">${renderTerm('MC', 'marketCap')} lúc qua lọc</span><span class="val">${launchMcapUsd > 0 ? '$' + formatNumber(launchMcapUsd) : '---'}</span></div>
+                    <div class="info-row"><span class="label">${renderTerm('MC', 'marketCap')} hiện tại</span><span class="val yellow">${currentMcapUsd > 0 ? '$' + formatNumber(currentMcapUsd) : '---'}</span></div>
+                    <div class="info-row"><span class="label">${renderTerm('MC', 'marketCap')} cao nhất</span><span class="val green">${highestMcapUsd > 0 ? '$' + formatNumber(highestMcapUsd) : '---'}</span></div>
+                    <div class="info-row"><span class="label">Hiệu suất</span><span class="val ${performancePct >= 0 ? 'green' : 'red'}">${performancePct >= 0 ? '+' : ''}${performancePct.toFixed(1)}%</span></div>
                 </div>
                 <div class="info-card">
-                    <h4><i class="fas fa-wave-square"></i> Du lieu thi truong</h4>
+                    <h4><i class="fas fa-wave-square"></i> Dữ liệu thị trường</h4>
                     <div class="info-row"><span class="label">${renderTerm('Volume', 'volume')} (24h)</span><span class="val highlight-val">${tokenData.volume > 0 ? tokenData.volume.toFixed(1) + ' SOL' : '---'}</span></div>
                     <div class="info-row"><span class="label">${renderTerm('Global Fee', 'globalFee')}</span><span class="val highlight-val yellow">${tokenData.globalFee > 0 ? tokenData.globalFee.toFixed(4) + ' SOL' : '---'}</span></div>
                     <div class="info-row"><span class="label">${renderTerm('Holder', 'holder')}</span><span class="val highlight-val green">${holderStats?.realHolderCount || '---'}</span></div>
-                    <div class="info-row"><span class="label">Cap nhat luc</span><span class="val">${refreshedAt}</span></div>
+                    <div class="info-row"><span class="label">Cập nhật lúc</span><span class="val">${refreshedAt}</span></div>
                 </div>
                 <div class="info-card">
-                    <h4><i class="fas fa-clock"></i> Dong thoi gian</h4>
-                    <div class="info-row"><span class="label">Qua loc luc</span><span class="val">${passedAt}</span></div>
-                    <div class="info-row"><span class="label">${renderTerm('ATH', 'ath')} luc</span><span class="val">${highestAt}</span></div>
+                    <h4><i class="fas fa-clock"></i> Dòng thời gian</h4>
+                    <div class="info-row"><span class="label">Qua lọc lúc</span><span class="val">${passedAt}</span></div>
+                    <div class="info-row"><span class="label">${renderTerm('ATH', 'ath')} lúc</span><span class="val">${highestAt}</span></div>
                     <div class="info-row"><span class="label">${renderTerm('Deployer', 'deployer')}</span><span class="val" style="font-size: 10px;">${deployer || '---'}</span></div>
                 </div>
             </div>
             <div style="font-size: 10px; color: var(--text-muted); text-align: right; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border);">
-                Token da vuot qua bo loc. Nhan "Cap nhat trang thai" de lam moi du lieu.
+                Token đã vượt qua bộ lọc. Nhấn "Cập nhật trạng thái" để làm mới dữ liệu.
             </div>
         `;
 
@@ -981,18 +981,18 @@ function renderAnalysis(data) {
     html += `
         <div class="verdict-box ${isPassed ? 'pass' : 'fail'}">
             <i class="fas ${isPassed ? 'fa-check-double' : 'fa-shield-alt'}"></i>
-            <span>${formatRichText(ruleResult.summary || (isPassed ? 'Tat ca quy tac deu dat.' : 'Bi chan boi bo quy tac.'))}</span>
+            <span>${formatRichText(ruleResult.summary || (isPassed ? 'Tất cả quy tắc đều đạt.' : 'Bị chặn bởi bộ quy tắc.'))}</span>
 
             <button class="refresh-btn" id="refreshBtn" onclick="manualRefresh('${mint}')">
                 <i class="fas fa-sync-alt"></i>
-                <span>Cap nhat trang thai</span>
+                <span>Cập nhật trạng thái</span>
             </button>
         </div>
     `;
 
     // ── Rule Results ──
     if (ruleResult.results && ruleResult.results.length > 0) {
-        html += `<div class="section-title"><i class="fas fa-list-check"></i> Ket qua bo quy tac (${ruleResult.results.filter((r) => r.passed).length}/${ruleResult.results.length} dat)</div>`;
+        html += `<div class="section-title"><i class="fas fa-list-check"></i> Kết quả bộ quy tắc (${ruleResult.results.filter((r) => r.passed).length}/${ruleResult.results.length} đạt)</div>`;
         html += `<div class="rules-grid">`;
         for (const r of ruleResult.results) {
             const cls = r.passed ? 'pass' : (r.ruleType === 'INFO' ? 'info' : 'fail');
@@ -1015,7 +1015,7 @@ function renderAnalysis(data) {
         html += `
             <div style="padding: 20px; text-align: center; background: var(--bg-card); border-radius: var(--radius-md); border: 1px dashed var(--border); margin-bottom: 20px;">
                 <div style="font-size: 13px; color: var(--text-secondary); line-height: 1.6;">${formatRichText(ruleResult.summary)}</div>
-                <div style="font-size: 11px; color: var(--text-muted); margin-top: 8px;">(Ban ghi cu, chua co du lieu quy tac chi tiet)</div>
+                <div style="font-size: 11px; color: var(--text-muted); margin-top: 8px;">(Bản ghi cũ — chưa có dữ liệu quy tắc chi tiết)</div>
             </div>
         `;
     }
@@ -1028,22 +1028,22 @@ function renderAnalysis(data) {
         html += `<div class="info-grid">`;
 
         // Dev Analysis Card
-        html += `<div class="info-card"><h4><i class="fas fa-user-shield"></i> Phan tich ${renderTerm('Dev', 'dev')}</h4>`;
+        html += `<div class="info-card"><h4><i class="fas fa-user-shield"></i> Phân tích ${renderTerm('Dev', 'dev')}</h4>`;
         if (devData.address) {
             const riskColor = devData.riskScore >= 70 ? 'red' : devData.riskScore >= 40 ? 'yellow' : 'green';
             const riskLevel = escapeHtml(devData.riskLevel || '---');
             html += `
-                <div class="info-row"><span class="label">Dia chi</span><span class="val" style="font-size: 10px;">${escapeHtml(devData.address)}</span></div>
+                <div class="info-row"><span class="label">Địa chỉ</span><span class="val" style="font-size: 10px;">${escapeHtml(devData.address)}</span></div>
                 <div class="info-row"><span class="label">${renderTerm('Risk Score', 'riskScore')}</span><span class="val ${riskColor}">${devData.riskScore}/100 (${riskLevel})</span></div>
-                <div class="info-row"><span class="label">So du</span><span class="val">${(devData.balanceSol || 0).toFixed(3)} SOL</span></div>
-                <div class="info-row"><span class="label">So giao dich</span><span class="val">${devData.totalTxCount || 0}</span></div>
-                <div class="info-row"><span class="label">Token da tao</span><span class="val">${devData.tokensDeployed || 0}</span></div>
-                <div class="info-row"><span class="label">Tuoi vi</span><span class="val">${devData.walletAge || 0} ngay</span></div>
+                <div class="info-row"><span class="label">Số dư</span><span class="val">${(devData.balanceSol || 0).toFixed(3)} SOL</span></div>
+                <div class="info-row"><span class="label">Số giao dịch</span><span class="val">${devData.totalTxCount || 0}</span></div>
+                <div class="info-row"><span class="label">Token đã tạo</span><span class="val">${devData.tokensDeployed || 0}</span></div>
+                <div class="info-row"><span class="label">Tuổi ví</span><span class="val">${devData.walletAge || 0} ngày</span></div>
             `;
         } else if (data.devRiskScore !== undefined) {
             html += `<div class="info-row"><span class="label">${renderTerm('Risk Score', 'riskScore')}</span><span class="val">${data.devRiskScore}/100</span></div>`;
         } else {
-            html += `<div style="color: var(--text-muted); font-size: 11px;">Chua co du lieu</div>`;
+            html += `<div style="color: var(--text-muted); font-size: 11px;">Chưa có dữ liệu</div>`;
         }
         html += `</div>`;
 
@@ -1053,15 +1053,15 @@ function renderAnalysis(data) {
             const scoreColor = tsData.totalScore >= 70 ? 'green' : tsData.totalScore >= 45 ? 'yellow' : 'red';
             const verdict = escapeHtml(tsData.verdict || '---');
             html += `
-                <div class="info-row"><span class="label">Tong diem</span><span class="val ${scoreColor}">${tsData.totalScore}/100 (${verdict})</span></div>
+                <div class="info-row"><span class="label">Tổng điểm</span><span class="val ${scoreColor}">${tsData.totalScore}/100 (${verdict})</span></div>
                 <div class="info-row"><span class="label">${renderTerm('Metadata', 'metadata')}</span><span class="val">${tsData.metadataScore || 0}</span></div>
                 <div class="info-row"><span class="label">${renderTerm('Bonding Curve', 'bondingCurve')}</span><span class="val">${tsData.bondingCurveScore || 0}</span></div>
                 <div class="info-row"><span class="label">${renderTerm('URI Score', 'uriScore')}</span><span class="val">${tsData.uriScore || 0}</span></div>
             `;
         } else if (data.tokenScore !== undefined && typeof data.tokenScore === 'number') {
-            html += `<div class="info-row"><span class="label">Diem</span><span class="val">${data.tokenScore}/100</span></div>`;
+            html += `<div class="info-row"><span class="label">Điểm</span><span class="val">${data.tokenScore}/100</span></div>`;
         } else {
-            html += `<div style="color: var(--text-muted); font-size: 11px;">Chua co du lieu</div>`;
+            html += `<div style="color: var(--text-muted); font-size: 11px;">Chưa có dữ liệu</div>`;
         }
         html += `</div>`;
 
@@ -1070,17 +1070,17 @@ function renderAnalysis(data) {
 
     // ── Holder Stats ──
     if (holderStats) {
-        html += `<div class="section-title"><i class="fas fa-users"></i> Phan bo ${renderTerm('Holder', 'holder')}</div>`;
+        html += `<div class="section-title"><i class="fas fa-users"></i> Phân bổ ${renderTerm('Holder', 'holder')}</div>`;
         html += `<div class="info-grid">`;
 
-        html += `<div class="info-card"><h4><i class="fas fa-chart-pie"></i> Do tap trung (% cung, tru pool)</h4>`;
+        html += `<div class="info-card"><h4><i class="fas fa-chart-pie"></i> Độ tập trung (% cung, trừ pool)</h4>`;
         const t10Color = holderStats.top10Percent > 30 ? 'red' : holderStats.top10Percent > 20 ? 'yellow' : 'green';
         const devColor = holderStats.devHoldPercent > 20 ? 'red' : holderStats.devHoldPercent > 10 ? 'yellow' : 'green';
         const bundleColor = holderStats.bundleHoldPercent > 20 ? 'red' : 'green';
         const earlyBuyerColor = holderStats.earlyBuyerHoldPercent > 20 ? 'red' : 'green';
         html += `
-            <div class="info-row"><span class="label">${renderTerm('Holder', 'holder')} thuc</span><span class="val">${holderStats.realHolderCount ?? 0}${typeof holderStats.filteredFunctionalCount === 'number' ? ` | Loc: ${holderStats.filteredFunctionalCount}` : ''}</span></div>
-            <div class="info-row"><span class="label">Top 10</span><span class="val ${t10Color}">${holderStats.top10Percent?.toFixed(1)}%${typeof holderStats.top10OwnersPercent === 'number' ? ` | Vi so huu: ${holderStats.top10OwnersPercent.toFixed(1)}%` : ''}</span></div>
+            <div class="info-row"><span class="label">${renderTerm('Holder', 'holder')} thực</span><span class="val">${holderStats.realHolderCount ?? 0}${typeof holderStats.filteredFunctionalCount === 'number' ? ` | Lọc: ${holderStats.filteredFunctionalCount}` : ''}</span></div>
+            <div class="info-row"><span class="label">Top 10</span><span class="val ${t10Color}">${holderStats.top10Percent?.toFixed(1)}%${typeof holderStats.top10OwnersPercent === 'number' ? ` | Ví sở hữu: ${holderStats.top10OwnersPercent.toFixed(1)}%` : ''}</span></div>
             <div class="info-row"><span class="label">${renderTerm('Dev', 'dev')}</span><span class="val ${devColor}">${holderStats.devHoldPercent?.toFixed(1)}%</span></div>
             <div class="info-row"><span class="label">${renderTerm('Bundle', 'bundle')}</span><span class="val ${bundleColor}">${holderStats.bundleHoldPercent?.toFixed(1)}%</span></div>
             <div class="info-row"><span class="label">${renderTerm('Early Buyers', 'earlyBuyers')}</span><span class="val ${earlyBuyerColor}">${holderStats.earlyBuyerHoldPercent?.toFixed(1)}%</span></div>
@@ -1088,7 +1088,7 @@ function renderAnalysis(data) {
         html += `</div>`;
 
         // Cluster info
-        html += `<div class="info-card"><h4><i class="fas fa-project-diagram"></i> Phan tich ${renderTerm('Cluster', 'cluster')}</h4>`;
+        html += `<div class="info-card"><h4><i class="fas fa-project-diagram"></i> Phân tích ${renderTerm('Cluster', 'cluster')}</h4>`;
         if (clusterAnalysis) {
             const clRisk = clusterAnalysis.riskLevel;
             const clColor = clRisk === 'HIGH' ? 'red' : clRisk === 'MEDIUM' ? 'yellow' : 'green';
@@ -1097,18 +1097,18 @@ function renderAnalysis(data) {
             const clRiskLabel = clRisk === 'HIGH'
                 ? 'CAO'
                 : clRisk === 'MEDIUM'
-                    ? 'TRUNG BINH'
-                    : 'THAP';
-            
+                    ? 'TRUNG BÌNH'
+                    : 'THẤP';
+
             html += `
-                <div class="info-row"><span class="label">Tin hieu thang</span><span class="val ${isWinnerSignal ? 'green' : 'yellow'}" style="font-weight:700">${isWinnerSignal ? 'MANH (x5+)' : 'CAN THEO DOI'}</span></div>
-                <div class="info-row"><span class="label">Co cluster</span><span class="val ${clusterAnalysis.isLikelyCluster ? 'red' : 'green'}">${clusterAnalysis.isLikelyCluster ? 'CO' : 'KHONG'}</span></div>
-                <div class="info-row"><span class="label">Muc rui ro</span><span class="val ${clColor}">${clRiskLabel}</span></div>
-                <div class="info-row"><span class="label">Vi me chung</span><span class="val" style="font-weight:700">${sharedCount}</span></div>
+                <div class="info-row"><span class="label">Tín hiệu thắng</span><span class="val ${isWinnerSignal ? 'green' : 'yellow'}" style="font-weight:700">${isWinnerSignal ? 'MẠNH (x5+)' : 'CẦN THEO DÕI'}</span></div>
+                <div class="info-row"><span class="label">Có ${renderTerm('Cluster', 'cluster')}</span><span class="val ${clusterAnalysis.isLikelyCluster ? 'red' : 'green'}">${clusterAnalysis.isLikelyCluster ? 'CÓ' : 'KHÔNG'}</span></div>
+                <div class="info-row"><span class="label">Mức rủi ro</span><span class="val ${clColor}">${clRiskLabel}</span></div>
+                <div class="info-row"><span class="label">Ví mẹ chung</span><span class="val" style="font-weight:700">${sharedCount}</span></div>
                 <div class="info-row"><span class="label">${renderTerm('White Wallet', 'whiteWallet')}</span><span class="val">${clusterAnalysis.whiteWalletCount || 0}/${clusterAnalysis.walletCount || 0}</span></div>
             `;
         } else {
-            html += `<div style="color: var(--text-muted); font-size: 11px;">Chua co du lieu cluster</div>`;
+            html += `<div style="color: var(--text-muted); font-size: 11px;">Chưa có dữ liệu ${renderTerm('Cluster', 'cluster')}</div>`;
         }
         html += `</div>`;
 
@@ -1122,22 +1122,22 @@ function renderAnalysis(data) {
             <table class="buyers-table">
                 <thead>
                     <tr>
-                        <th>Vi</th>
-                        <th>Mua</th>
-                        <th>Loai</th>
-                        <th>So du</th>
-                        <th>Tuoi</th>
-                        <th>TXs</th>
-                        <th>Nguon</th>
+                        <th>Ví</th>
+                        <th>Đã mua</th>
+                        <th>Loại</th>
+                        <th>Số dư</th>
+                        <th>Tuổi</th>
+                        <th>Giao dịch</th>
+                        <th>Nguồn</th>
                     </tr>
                 </thead>
                 <tbody>
         `;
         for (const buyer of earlyBuyers) {
             const tagClass = buyer.isWhiteWallet ? 'white' : 'old';
-            const tagText = buyer.isWhiteWallet ? 'MOI' : 'CU';
+            const tagText = buyer.isWhiteWallet ? 'MỚI' : 'CŨ';
             const source = buyer.sourceOfFunds?.hasCEXFunding ? 'CEX' :
-                (buyer.fundingWallets?.length > 0 ? 'Vi' : '---');
+                (buyer.fundingWallets?.length > 0 ? 'Ví' : '---');
             html += `
                 <tr>
                     <td style="font-size: 10px; font-family: 'JetBrains Mono', monospace;">${escapeHtml(buyer.address)}</td>
@@ -1156,7 +1156,7 @@ function renderAnalysis(data) {
     // ── Footer ──
     html += `
         <div style="font-size: 10px; color: var(--text-muted); text-align: right; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border);">
-            Phan tich luc: ${timeStr} | ${renderTerm('Deployer', 'deployer')}: ${deployer || '---'}
+            Phân tích lúc: ${timeStr} | ${renderTerm('Deployer', 'deployer')}: ${deployer || '---'}
         </div>
     `;
 
@@ -1203,7 +1203,7 @@ socket.on('passedTokensUpdate', (tokens) => {
         row.dataset.mint = token.mint;
         row.dataset.launch = launchMcap;
         const isLive = token.current_mcap_usd > 0;
-        const statusBadge = isLive ? `<span class="mini-badge live">LIVE</span>` : `<span class="mini-badge token-passed">PASSED</span>`;
+        const statusBadge = isLive ? `<span class="mini-badge live" title="Đang có dữ liệu thị trường mới">LIVE</span>` : `<span class="mini-badge token-passed">ĐÃ QUA LỌC</span>`;
 
         row.innerHTML = `
             <div class="passed-row-header">
@@ -1211,16 +1211,16 @@ socket.on('passedTokensUpdate', (tokens) => {
                 <span class="multiplier peak up">x${peakMultiplier}</span>
             </div>
             <div class="mcap-line launch-line">
-                <span class="label">Pass MC:</span>
+                <span class="label">MC lúc qua lọc:</span>
                 <span class="val yellow">$${formatNumber(launchMcap)} ${token.launch_mcap_sol ? `(${token.launch_mcap_sol.toFixed(2)} SOL)` : ''}</span>
             </div>
             <div class="mcap-line peak-line">
-                <span class="label">ATH MC:</span>
+                <span class="label"><span class="term-en" data-tooltip="All-Time High — Mức giá trị thị trường cao nhất đạt được">ATH</span> MC:</span>
                 <span class="val up">$${formatNumber(highMcap)} (+${peakPnl}%)</span>
             </div>
             ${currentMcap > 0 ? `
             <div class="mcap-line current-line">
-                <span class="label">Current:</span>
+                <span class="label">Hiện tại:</span>
                 <span class="val ${currentPnl >= 0 ? 'up' : 'down'}">$${formatNumber(currentMcap)} (${currentPnl >= 0 ? '+' : ''}${currentPnl}%)</span>
             </div>` : ''}
         `;
@@ -1271,11 +1271,11 @@ socket.on('topPnLUpdate', (tokens) => {
                 </div>
                 <div style="text-align: right">
                     <div class="multiplier highlight-pnl peak up">+${peakPnlPercent.toFixed(1)}%</div>
-                    <div class="highlight-pnl current ${currentPnlPercent >= 0 ? 'up' : 'down'}" style="font-size: 9px; margin-top: 2px;">Now: ${currentPnlPercent >= 0 ? '+' : ''}${currentPnlPercent.toFixed(0)}%</div>
+                    <div class="highlight-pnl current ${currentPnlPercent >= 0 ? 'up' : 'down'}" style="font-size: 9px; margin-top: 2px;">Hiện: ${currentPnlPercent >= 0 ? '+' : ''}${currentPnlPercent.toFixed(0)}%</div>
                 </div>
             </div>
             <div class="mcap-line peak-line">
-                <span class="label">ATH MC:</span>
+                <span class="label"><span class="term-en" data-tooltip="All-Time High — Mức giá trị thị trường cao nhất đạt được">ATH</span> MC:</span>
                 <span class="val green">$${formatNumber(highMcap)} (x${peakMultiplier})</span>
             </div>
         `;
@@ -1300,7 +1300,7 @@ socket.on('winRateUpdate', (data) => {
         const { winRate, wins, losses, total, avgPnlPercent } = data[p];
         const strong = el.querySelector('strong');
         if (strong) strong.textContent = total > 0 ? `${winRate.toFixed(1)}%` : '--%';
-        el.title = `Win ${p.toUpperCase()}: ${wins}W / ${losses}L (${total} total) | Avg PnL (ATH): ${avgPnlPercent.toFixed(1)}% | ≥x1.1 = Win, ≤x1.0 = Loss`;
+        el.title = `Tỉ lệ thắng ${p.toUpperCase()}: ${wins} thắng / ${losses} thua (tổng ${total}) | PnL TB (ATH): ${avgPnlPercent.toFixed(1)}% | ≥x1.1 = Thắng, ≤x1.0 = Thua`;
         // Color coding
         el.classList.remove('win-high', 'win-mid', 'win-low');
         if (total > 0) {
@@ -1419,7 +1419,7 @@ function renderRuleProfiles(profiles = [], activeProfileId = 'custom') {
     const activeProfile = profiles.find((profile) => profile.id === activeRuleProfile);
 
     if (activeRuleProfileName) {
-        activeRuleProfileName.textContent = activeProfile ? activeProfile.name : 'Custom';
+        activeRuleProfileName.textContent = activeProfile ? activeProfile.name : 'Tùy chỉnh';
     }
 
     if (activeRuleProfileBadge) {
@@ -1439,7 +1439,7 @@ function renderRuleProfiles(profiles = [], activeProfileId = 'custom') {
     if (!profileList.some((profile) => profile.id === 'custom')) {
         profileList.push({
             id: 'custom',
-            name: 'Custom',
+            name: 'Tùy chỉnh',
             description: 'Trạng thái hiện tại sau khi chỉnh tay. Áp lại preset để quay về cấu hình chuẩn.',
         });
     }
@@ -1472,18 +1472,8 @@ socket.on('ruleProfiles', (payload) => {
 socket.on('rulesList', (rules) => {
     rulesContainer.innerHTML = '';
 
-    const paramLabels = {
-        tolerancePercent: 'Do lech (%)',
-        minGlobalFee: `${renderTerm('Global Fee', 'globalFee')} toi thieu (SOL)`,
-        maxPercent: 'Toi da (%)',
-        minVol: `${renderTerm('Volume', 'volume')} toi thieu`,
-        maxMinutes: 'Phut toi da',
-        minMarketCapSol: `${renderTerm('MC', 'marketCap')} toi thieu`,
-        maxRiskScore: `${renderTerm('Risk Score', 'riskScore')} toi da`,
-        minScore: 'Diem toi thieu',
-        maxProgressPercent: `${renderTerm('Bonding Curve', 'bondingCurve')} toi da (%)`,
-        maxFreshCount: 'So vi moi toi da',
-    };
+    // Dùng RULE_PARAM_LABELS đã định nghĩa sẵn ở trên
+    const paramLabels = RULE_PARAM_LABELS;
 
     for (const rule of rules) {
         const div = document.createElement('div');
@@ -1494,8 +1484,8 @@ socket.on('rulesList', (rules) => {
 
         div.innerHTML = `
             <div class="rule-switch-info">
-                <span class="rule-switch-name">${rule.name}</span>
-                <span class="rule-switch-type ${rule.type.toLowerCase()}">${rule.type}</span>
+                <span class="rule-switch-name">${getRuleDisplayName(rule.id, rule.name)}</span>
+                <span class="rule-switch-type ${rule.type.toLowerCase()}">${getRuleTypeLabel(rule.type)}</span>
                 ${numericParams.length > 0 ? `
                     <div class="rule-param-list">
                         ${numericParams.map((param) => `
