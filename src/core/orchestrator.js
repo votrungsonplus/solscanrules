@@ -1017,7 +1017,7 @@ class Orchestrator extends EventEmitter {
 
     const buyers = earlyBuyers || [];
     const buyerCountAtStart = buyers.length; // Snapshot to detect new arrivals during analysis
-    const requiredBuyers = settings.monitoring.earlyBuyersToMonitor;
+    const requiredBuyers = settings.monitoring.minBuyersToPass;
     const hasEnoughBuyers = buyers.length >= requiredBuyers;
 
     // Extract addresses and trade data from early buyer objects
