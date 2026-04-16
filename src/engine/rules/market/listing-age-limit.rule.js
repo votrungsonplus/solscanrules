@@ -7,6 +7,7 @@ module.exports = () => ({
   enabled: true,
   type: 'REQUIRE',
   maxMinutes: settings.rules.maxMinutes,
+  retryable: true,
   evaluate: (ctx) => {
     const { tokenData } = ctx;
     const ageMinutes = (Date.now() - tokenData.timestamp) / 60000;
