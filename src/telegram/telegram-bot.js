@@ -371,6 +371,9 @@ class TelegramBot {
       text += `\n`;
     }
 
+    // Links section
+    text += `🔗 <b>Links:</b> <a href="https://dexscreener.com/solana/${tokenData.mint}">DexS</a> | <a href="https://trade.padre.gg/trade/solana/${tokenData.axiomRouteAddress || tokenData.mint}">Padre</a> | <a href="https://pump.fun/coin/${tokenData.mint}">Pump</a>\n\n`;
+
     // All rule conditions with pass/fail status
     text += `🛡 <b>Chi tiết lọc kèo (Pass):</b>\n`;
     for (const r of ruleResult.results) {
@@ -401,10 +404,16 @@ class TelegramBot {
     // Row 1: Quick tool links
     buttons.push([
       Markup.button.url('📈 DexScreener', `https://dexscreener.com/solana/${tokenData.mint}`),
+      Markup.button.url('🔥 Padre', `https://trade.padre.gg/trade/solana/${tokenData.axiomRouteAddress || tokenData.mint}`),
+    ]);
+
+    // Row 2: Secondary tools
+    buttons.push([
+      Markup.button.url('🍬 PumpFun', `https://pump.fun/coin/${tokenData.mint}`),
       Markup.button.url('🤖 Phanes Bot', `https://t.me/Phanes_bot?start=${tokenData.mint}`),
     ]);
 
-    // Row 2: Trading or Info
+    // Row 3: Trading or Info
     if (ruleResult.shouldBuy && !settings.trading.autoBuyEnabled) {
       buttons.push([
         Markup.button.callback(`🛒 Mua ${formatSol(settings.trading.buyAmountSol)}`, `buy:${tokenData.mint}`),
@@ -412,7 +421,6 @@ class TelegramBot {
       ]);
     } else {
       buttons.push([
-        Markup.button.url('🍬 PumpFun', `https://pump.fun/coin/${tokenData.mint}`),
         Markup.button.url('📊 Birdeye', `https://birdeye.so/token/${tokenData.mint}?chain=solana`),
       ]);
     }
