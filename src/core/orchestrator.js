@@ -261,7 +261,12 @@ class Orchestrator extends EventEmitter {
 
     const mcapRule = ruleEngine.rules.get('market_cap_check');
     const ageRule = ruleEngine.rules.get('listing_age_limit');
-    logger.info(`Loaded persistent settings (Auto-Buy: ${settings.trading.autoBuyEnabled}, Amount: ${settings.trading.buyAmountSol} SOL, Min MCap: ${mcapRule?.minMarketCapSol || 10} SOL, Max Age: ${ageRule?.maxMinutes || 5}m)`);
+    logger.info(`Loaded persistent settings (Auto-Buy: ${settings.trading.autoBuyEnabled}, Amount: ${settings.trading.buyAmountSol} SOL, Min MCap: ${mcapRule?.minMarketCapSol || settings.rules.minMarketCapSol} SOL, Max Age: ${ageRule?.maxMinutes || settings.rules.maxMinutes}m)`);
+
+    // ENV-SYNC: Ghi lại .env với giá trị thực đang chạy (sau DB restore)
+    const { syncToEnv } = require('../config/env-sync');
+    syncToEnv(settings, ruleEngine);
+    logger.info('ENV-SYNC: .env synchronized with live settings');
 
     // 4. Initialize Telegram bot (non-blocking)
     telegram.init((command, params) => this._handleTelegramCommand(command, params));
@@ -880,11 +885,17 @@ class Orchestrator extends EventEmitter {
         realHolderCount: filteredParsedAccounts.length,
         filteredFunctionalCount,
         axiomRouteAddress,
-        topHolders: top10.map(t => ({
-          address: t.addr,
-          owner: t.owner,
-          percent: Math.min((t.amount / supply) * 100, 100),
-        })),
+        topHolders: top10.map(t => {
+          const addr = t.addr || '';
+          const ownerAddr = t.owner || '';
+          return {
+            address: addr,
+            owner: ownerAddr,
+            percent: Math.min((t.amount / supply) * 100, 100),
+            isDev: ownerAddr === deployer || addr === deployer,
+            isBundle: bundleWallets ? (bundleWallets.has(ownerAddr) || bundleWallets.has(addr)) : false,
+          };
+        }),
       };
       this.holderStatsCache.set(mint, { data: result, timestamp: Date.now() });
       return result;

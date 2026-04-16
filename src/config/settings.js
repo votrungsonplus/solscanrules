@@ -78,15 +78,15 @@ const settings = {
 
   // Rules Engine Defaults (Synchronized with Dashboard)
   rules: {
-    minMarketCapSol: parseFloat(process.env.RULE_MIN_MC_SOL || process.env.MIN_MARKET_CAP_SOL || '10'),
+    minMarketCapSol: parseFloat(process.env.RULE_MIN_MC_SOL || process.env.MIN_MARKET_CAP_SOL || '80'),
     maxMinutes: parseInt(process.env.RULE_MAX_AGE_MIN || '5'),
-    maxPercentTop10: parseFloat(process.env.RULE_TOP10_MAX_PCT || '30'),
+    maxPercentTop10: parseFloat(process.env.RULE_TOP10_MAX_PCT || '28'),
     minPercentTop10: parseFloat(process.env.RULE_TOP10_MIN_PCT || '15'),
     maxPercentDev: parseFloat(process.env.RULE_DEV_HOLD_MAX_PCT || '20'),
     maxPercentBundle: parseFloat(process.env.RULE_BUNDLE_MAX_PCT || '20'),
     minVol: parseFloat(process.env.RULE_MIN_VOL_SOL || '30'),
     minGlobalFee: parseFloat(process.env.RULE_MIN_GLOBAL_FEE || process.env.GLOBAL_FEE_THRESHOLD || '0.3'),
-    minSharedFunders: parseInt(process.env.RULE_MIN_FUNDERS || '3'),
+    minSharedFunders: parseInt(process.env.RULE_MIN_FUNDERS || '2'),
     maxRiskScore: parseInt(process.env.RULE_MAX_RISK || '50'),
     minScore: parseInt(process.env.RULE_MIN_SCORE || '40'),
     maxProgressPercent: parseFloat(process.env.RULE_MAX_PROGRESS || '80'),
@@ -94,7 +94,7 @@ const settings = {
     tolerancePercent: parseFloat(process.env.RULE_TOLERANCE_PCT || '10'),
     // New Wallet Accumulation rule
     accumulationCheckFirstX: parseInt(process.env.RULE_ACCUMULATION_CHECK_X || '5'),
-    accumulationMaxPercent: parseFloat(process.env.RULE_ACCUMULATION_MAX_PCT || '15'),
+    accumulationMaxPercent: parseFloat(process.env.RULE_ACCUMULATION_MAX_PCT || '30'),
   },
 };
 

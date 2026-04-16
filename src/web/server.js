@@ -15,6 +15,7 @@ const {
   markProfileAsCustom,
   persistAppliedRuleProfile,
 } = require('../engine/rule-profiles');
+const { syncToEnv, getComparisonTable } = require('../config/env-sync');
 
 class WebServer {
   constructor() {
@@ -132,6 +133,11 @@ class WebServer {
 
     this.app.get('/api/winrate', (req, res) => {
       res.json(tracker.getWinRateStats());
+    });
+
+    // ENV-SYNC: So sánh .env ↔ settings đang chạy
+    this.app.get('/api/env-status', (req, res) => {
+      res.json(getComparisonTable(settings, ruleEngine));
     });
 
     // Socket.IO connections
@@ -301,7 +307,8 @@ class WebServer {
           activeRuleProfile: ruleEngine.getActiveProfile(),
           profiles: getRuleProfiles(),
         });
-        logger.info(`Web action: Rule ${ruleId} set to ${enabled} (Saved to DB)`);
+        syncToEnv(settings, ruleEngine);
+        logger.info(`Web action: Rule ${ruleId} set to ${enabled} (Saved to DB + .env)`);
       });
 
       // Update rule parameter (e.g., minMarketCapSol, maxPercent, etc.)
@@ -318,7 +325,8 @@ class WebServer {
           activeRuleProfile: ruleEngine.getActiveProfile(),
           profiles: getRuleProfiles(),
         });
-        logger.info(`Web action: Rule ${ruleId}.${param} = ${val} (Saved to DB)`);
+        syncToEnv(settings, ruleEngine);
+        logger.info(`Web action: Rule ${ruleId}.${param} = ${val} (Saved to DB + .env)`);
       });
 
       socket.on('applyRuleProfile', async (profileId) => {
@@ -331,7 +339,8 @@ class WebServer {
             profiles: getRuleProfiles(),
           });
           this.io.emit('botStatus', await buildBotStatusPayload());
-          logger.info(`Web action: Applied rule profile ${profile.id}`);
+          syncToEnv(settings, ruleEngine);
+          logger.info(`Web action: Applied rule profile ${profile.id} (Saved to DB + .env)`);
         } catch (err) {
           logger.warn(`Failed to apply rule profile ${profileId}: ${err.message}`);
         }
@@ -342,7 +351,8 @@ class WebServer {
         settings.trading.autoBuyEnabled = enabled;
         tracker.saveBotSetting('autoBuyEnabled', enabled);
         this.io.emit('botStatus', await buildBotStatusPayload());
-        logger.info(`Web action: Auto-Buy set to ${enabled} (Saved to DB)`);
+        syncToEnv(settings, ruleEngine);
+        logger.info(`Web action: Auto-Buy set to ${enabled} (Saved to DB + .env)`);
       });
 
       // Update auto-sell
@@ -350,7 +360,8 @@ class WebServer {
         settings.trading.autoSellEnabled = enabled;
         tracker.saveBotSetting('autoSellEnabled', enabled);
         this.io.emit('botStatus', await buildBotStatusPayload());
-        logger.info(`Web action: Auto-Sell set to ${enabled} (Saved to DB)`);
+        syncToEnv(settings, ruleEngine);
+        logger.info(`Web action: Auto-Sell set to ${enabled} (Saved to DB + .env)`);
       });
 
       // Update buy amount
@@ -360,7 +371,8 @@ class WebServer {
           settings.trading.buyAmountSol = val;
           tracker.saveBotSetting('buyAmountSol', val);
           this.io.emit('botStatus', await buildBotStatusPayload());
-          logger.info(`Web action: Buy Amount set to ${val} SOL (Saved to DB)`);
+          syncToEnv(settings, ruleEngine);
+          logger.info(`Web action: Buy Amount set to ${val} SOL (Saved to DB + .env)`);
         }
       });
 
@@ -426,7 +438,8 @@ class WebServer {
           activeRuleProfile: ruleEngine.getActiveProfile(),
           profiles: getRuleProfiles(),
         });
-        logger.info(`Web action: ${key} = ${val} (Saved to DB)`);
+        syncToEnv(settings, ruleEngine);
+        logger.info(`Web action: ${key} = ${val} (Saved to DB + .env)`);
       });
 
       // Get analysis for a specific token

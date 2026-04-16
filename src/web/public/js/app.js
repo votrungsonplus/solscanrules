@@ -365,8 +365,17 @@ socket.on('disconnect', () => {
 // SOL PRICE
 // ═══════════════════════════════════════
 socket.on('solPriceUpdate', (price) => {
+    const prevPrice = solPrice;
     solPrice = price;
-    if (solPriceEl) solPriceEl.textContent = `$${price.toFixed(2)}`;
+    if (solPriceEl) {
+        solPriceEl.textContent = `$${price.toFixed(2)}`;
+        // Flash green/red on price change
+        if (prevPrice > 0 && prevPrice !== price) {
+            const flashClass = price > prevPrice ? 'flash-green' : 'flash-red';
+            solPriceEl.classList.add(flashClass);
+            setTimeout(() => solPriceEl.classList.remove(flashClass), 1500);
+        }
+    }
 });
 
 // ═══════════════════════════════════════
@@ -964,15 +973,28 @@ function renderAnalysis(data) {
     }
 
     // ── Bonding Curve Progress ──
+    const vSolInCurve = tokenData.vSolInBondingCurve || 0;
     if (bondingProgress > 0) {
+        const curveStatus = bondingProgress >= 100 ? 'ĐÃ LÊN DEX' : (bondingProgress > 70 ? 'SẮP ĐẦY' : 'ĐANG TÍCH LŨY');
+        const curveStatusColor = bondingProgress >= 100 ? 'var(--green)' : (bondingProgress > 70 ? 'var(--yellow)' : 'var(--text-muted)');
+        html += `
+            <div class="progress-bar-container">
+                <div class="progress-label">
+                    <span>${renderTerm('Bonding Curve', 'bondingCurve')} <span style="font-size: 10px; color: ${curveStatusColor};">(${curveStatus})</span></span>
+                    <span>${bondingProgress.toFixed(1)}%${vSolInCurve > 0 ? ` — ${vSolInCurve.toFixed(1)} SOL trong curve` : ''}</span>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill ${bondingProgress > 70 ? 'high' : ''}" style="width: ${Math.min(bondingProgress, 100)}%"></div>
+                </div>
+            </div>
+        `;
+    } else {
+        // Non-pump token or data not available
         html += `
             <div class="progress-bar-container">
                 <div class="progress-label">
                     <span>${renderTerm('Bonding Curve', 'bondingCurve')}</span>
-                    <span>${bondingProgress.toFixed(1)}%</span>
-                </div>
-                <div class="progress-bar">
-                    <div class="progress-fill ${bondingProgress > 70 ? 'high' : ''}" style="width: ${Math.min(bondingProgress, 100)}%"></div>
+                    <span style="color: var(--text-muted); font-size: 11px;">Không có dữ liệu (có thể đã lên DEX)</span>
                 </div>
             </div>
         `;
@@ -1033,14 +1055,33 @@ function renderAnalysis(data) {
         if (devData.address) {
             const riskColor = devData.riskScore >= 70 ? 'red' : devData.riskScore >= 40 ? 'yellow' : 'green';
             const riskLevel = escapeHtml(devData.riskLevel || '---');
+            const devSolscan = `https://solscan.io/account/${encodeURIComponent(devData.address)}`;
             html += `
-                <div class="info-row"><span class="label">Địa chỉ</span><span class="val" style="font-size: 10px;">${escapeHtml(devData.address)}</span></div>
+                <div class="info-row"><span class="label">Địa chỉ</span><span class="val" style="font-size: 10px;"><a href="${devSolscan}" target="_blank" rel="noreferrer" style="color: var(--text-secondary); text-decoration: none;">${escapeHtml(devData.address)}</a></span></div>
                 <div class="info-row"><span class="label">${renderTerm('Risk Score', 'riskScore')}</span><span class="val ${riskColor}">${devData.riskScore}/100 (${riskLevel})</span></div>
                 <div class="info-row"><span class="label">Số dư</span><span class="val">${(devData.balanceSol || 0).toFixed(3)} SOL</span></div>
                 <div class="info-row"><span class="label">Số giao dịch</span><span class="val">${devData.totalTxCount || 0}</span></div>
-                <div class="info-row"><span class="label">Token đã tạo</span><span class="val">${devData.tokensDeployed || 0}</span></div>
-                <div class="info-row"><span class="label">Tuổi ví</span><span class="val">${devData.walletAge || 0} ngày</span></div>
+                <div class="info-row"><span class="label">Token đã tạo</span><span class="val ${(devData.tokensDeployed || 0) > 5 ? 'red' : (devData.tokensDeployed || 0) > 2 ? 'yellow' : 'green'}">${devData.tokensDeployed || 0}${devData.tokensDeployed > 3 ? ' ⚠️' : ''}</span></div>
+                <div class="info-row"><span class="label">Tuổi ví</span><span class="val ${(devData.walletAge || 0) < 7 ? 'red' : 'green'}">${devData.walletAge || 0} ngày</span></div>
             `;
+            // Additional dev details if available
+            if (devData.hasSelledBefore !== undefined || devData.rugPullHistory !== undefined) {
+                html += `<div style="margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--border);">`;
+                if (devData.hasSelledBefore !== undefined) {
+                    html += `<div class="info-row"><span class="label">Đã bán token cũ</span><span class="val ${devData.hasSelledBefore ? 'red' : 'green'}">${devData.hasSelledBefore ? 'CÓ' : 'KHÔNG'}</span></div>`;
+                }
+                if (devData.rugPullHistory !== undefined) {
+                    html += `<div class="info-row"><span class="label">Lịch sử rug</span><span class="val ${devData.rugPullHistory ? 'red' : 'green'}">${devData.rugPullHistory ? 'CÓ ⚠️' : 'KHÔNG'}</span></div>`;
+                }
+                if (devData.holdingPercent !== undefined) {
+                    html += `<div class="info-row"><span class="label">Đang hold</span><span class="val ${devData.holdingPercent > 20 ? 'red' : 'green'}">${devData.holdingPercent.toFixed(1)}%</span></div>`;
+                }
+                if (devData.lastActivity) {
+                    const lastActStr = new Date(devData.lastActivity).toLocaleString('vi-VN');
+                    html += `<div class="info-row"><span class="label">Hoạt động cuối</span><span class="val" style="font-size: 10px;">${lastActStr}</span></div>`;
+                }
+                html += `</div>`;
+            }
         } else if (data.devRiskScore !== undefined) {
             html += `<div class="info-row"><span class="label">${renderTerm('Risk Score', 'riskScore')}</span><span class="val">${data.devRiskScore}/100</span></div>`;
         } else {
@@ -1086,6 +1127,35 @@ function renderAnalysis(data) {
             <div class="info-row"><span class="label">${renderTerm('Bundle', 'bundle')}</span><span class="val ${bundleColor}">${holderStats.bundleHoldPercent?.toFixed(1)}%</span></div>
             <div class="info-row"><span class="label">${renderTerm('Early Buyers', 'earlyBuyers')}</span><span class="val ${earlyBuyerColor}">${holderStats.earlyBuyerHoldPercent?.toFixed(1)}%</span></div>
         `;
+
+        // Top holders detail breakdown
+        if (holderStats.topHolders && holderStats.topHolders.length > 0) {
+            html += `<div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border);">
+                <div style="font-size: 10px; color: var(--text-muted); margin-bottom: 4px;">Chi tiết Top ${Math.min(holderStats.topHolders.length, 10)} Holder:</div>
+                <table style="width: 100%; font-size: 10px; border-collapse: collapse;">
+                    <thead><tr style="color: var(--text-muted);">
+                        <th style="text-align: left; padding: 2px 4px;">#</th>
+                        <th style="text-align: left; padding: 2px 4px;">Ví</th>
+                        <th style="text-align: right; padding: 2px 4px;">%</th>
+                        <th style="text-align: right; padding: 2px 4px;">Vai trò</th>
+                    </tr></thead><tbody>`;
+            holderStats.topHolders.slice(0, 10).forEach((h, i) => {
+                const addr = h.address || h.owner || '';
+                const pct = h.percent || h.percentage || 0;
+                const role = h.isDev ? 'Dev' : (h.isBundle ? 'Bundle' : (h.isPool ? 'Pool' : ''));
+                const roleColor = h.isDev ? 'var(--yellow)' : (h.isBundle ? 'var(--red)' : (h.isPool ? 'var(--text-muted)' : 'var(--text-secondary)'));
+                html += `<tr style="border-top: 1px solid var(--border);">
+                    <td style="padding: 2px 4px; color: var(--text-muted);">${i + 1}</td>
+                    <td style="padding: 2px 4px; font-family: 'JetBrains Mono', monospace;">
+                        <a href="https://solscan.io/account/${encodeURIComponent(addr)}" target="_blank" rel="noreferrer" style="color: var(--text-secondary); text-decoration: none;" title="${escapeHtml(addr)}">${addr ? addr.substring(0, 6) + '...' + addr.slice(-4) : '---'}</a>
+                    </td>
+                    <td style="padding: 2px 4px; text-align: right; font-weight: 600; color: ${pct > 10 ? 'var(--red)' : 'var(--green)'};">${pct.toFixed(1)}%</td>
+                    <td style="padding: 2px 4px; text-align: right; font-size: 9px; color: ${roleColor};">${role}</td>
+                </tr>`;
+            });
+            html += `</tbody></table></div>`;
+        }
+
         html += `</div>`;
 
         // Cluster info
@@ -1199,10 +1269,28 @@ function renderAnalysis(data) {
         html += `</tbody></table>`;
     }
 
-    // ── Footer ──
+    // ── Footer with timestamps and data freshness ──
+    const analysisAt = tokenData.analysisTimestamp
+        ? new Date(tokenData.analysisTimestamp).toLocaleString('vi-VN')
+        : null;
+    const dataAgeMs = tokenData.analysisTimestamp ? (Date.now() - tokenData.analysisTimestamp) : null;
+    const dataAgeStr = dataAgeMs !== null
+        ? (dataAgeMs < 60000 ? `${Math.floor(dataAgeMs / 1000)}s trước`
+            : dataAgeMs < 3600000 ? `${Math.floor(dataAgeMs / 60000)}m trước`
+            : `${Math.floor(dataAgeMs / 3600000)}h trước`)
+        : null;
+    const freshnessColor = dataAgeMs !== null
+        ? (dataAgeMs < 60000 ? 'var(--green)' : dataAgeMs < 300000 ? 'var(--yellow)' : 'var(--red)')
+        : 'var(--text-muted)';
+
     html += `
-        <div style="font-size: 10px; color: var(--text-muted); text-align: right; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border);">
-            Phân tích lúc: ${timeStr} | ${renderTerm('Deployer', 'deployer')}: ${deployer || '---'}
+        <div style="font-size: 10px; color: var(--text-muted); text-align: right; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center;">
+            <span>${renderTerm('Deployer', 'deployer')}: ${deployer || '---'}</span>
+            <span>
+                Token tạo: ${timeStr}
+                ${analysisAt ? ` | Phân tích: ${analysisAt}` : ''}
+                ${dataAgeStr ? ` <span style="color: ${freshnessColor}; font-weight: 600;">(${dataAgeStr})</span>` : ''}
+            </span>
         </div>
     `;
 
@@ -1248,8 +1336,15 @@ socket.on('passedTokensUpdate', (tokens) => {
         row.className = 'passed-row';
         row.dataset.mint = token.mint;
         row.dataset.launch = launchMcap;
-        const isLive = token.current_mcap_usd > 0;
-        const statusBadge = isLive ? `<span class="mini-badge live" title="Đang có dữ liệu thị trường mới">LIVE</span>` : `<span class="mini-badge token-passed">ĐÃ QUA LỌC</span>`;
+        const refreshedAt = token.refreshed_at || token.refreshedAt;
+        const refreshAgeMs = refreshedAt ? (Date.now() - new Date(refreshedAt).getTime()) : Infinity;
+        const isLive = token.current_mcap_usd > 0 && refreshAgeMs < 600000; // Live = has data refreshed within 10 min
+        const isStale = token.current_mcap_usd > 0 && refreshAgeMs >= 600000;
+        const statusBadge = isLive
+            ? `<span class="mini-badge live" title="Dữ liệu cập nhật ${Math.floor(refreshAgeMs / 60000)}m trước">LIVE</span>`
+            : isStale
+                ? `<span class="mini-badge" style="background: var(--yellow); color: #000;" title="Dữ liệu cũ — ${Math.floor(refreshAgeMs / 60000)}m trước">CŨ</span>`
+                : `<span class="mini-badge token-passed">ĐÃ QUA LỌC</span>`;
 
         row.innerHTML = `
             <div class="passed-row-header">
@@ -1371,20 +1466,33 @@ socket.on('tradeHistory', (trades) => {
         const isBuy = trade.action === 'BUY';
         const time = new Date(trade.timestamp).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
         const pnl = trade.pnl_percent || 0;
+        const txSig = trade.tx_signature || trade.signature || '';
+        const txLink = txSig ? `<a href="https://solscan.io/tx/${encodeURIComponent(txSig)}" target="_blank" rel="noreferrer" style="color: var(--text-muted); font-size: 9px; text-decoration: none;" title="Xem TX trên Solscan"><i class="fas fa-external-link-alt" style="font-size: 8px;"></i></a>` : '';
+        const sellReason = !isBuy && trade.sell_reason ? `<div style="font-size: 9px; color: var(--text-muted);">${escapeHtml(trade.sell_reason)}</div>` : '';
+        const mcapAtTrade = trade.market_cap_sol || trade.marketCapSol;
+        const mcapStr = mcapAtTrade ? `<span style="font-size: 9px; color: var(--text-muted);">MC: ${mcapAtTrade.toFixed(1)}</span>` : '';
 
         const row = document.createElement('div');
         row.className = 'trade-row';
+        row.dataset.mint = trade.mint;
         row.innerHTML = `
             <div class="trade-icon ${isBuy ? 'buy' : 'sell'}">${isBuy ? 'B' : 'S'}</div>
             <div class="trade-info">
-                <div class="sym">${trade.token_symbol || shortenMint(trade.mint)}</div>
-                <div class="time">${time}</div>
+                <div class="sym">${trade.token_symbol || shortenMint(trade.mint)} ${txLink}</div>
+                <div class="time">${time} ${mcapStr}</div>
+                ${sellReason}
             </div>
             <div class="trade-amount">
                 <div class="sol">${trade.sol_amount?.toFixed(3) || '0'} SOL</div>
                 ${!isBuy && pnl !== 0 ? `<div class="pnl ${pnl > 0 ? 'green' : 'red'}">${pnl > 0 ? '+' : ''}${pnl.toFixed(1)}%</div>` : ''}
             </div>
         `;
+        row.addEventListener('click', () => {
+            if (trade.mint) {
+                selectedMint = trade.mint;
+                socket.emit('getAnalysis', trade.mint);
+            }
+        });
         tradeHistoryContainer.appendChild(row);
     }
 });
@@ -1431,16 +1539,32 @@ function updateRealPositions(positions) {
         const pnl = pos.currentPnlPercent || 0;
         row.className = 'trade-row position-row';
         row.dataset.mint = pos.mint;
-        
+
+        // Entry reason / which rules passed
+        const entryTime = pos.entryTimestamp ? new Date(pos.entryTimestamp).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '';
+        const entryReason = pos.entryReason || pos.reason || '';
+        const rulesPassedCount = pos.rulesPassedCount || pos.rulesPassed || '';
+        const entryDetail = entryReason
+            ? `<div style="font-size: 9px; color: var(--text-muted); margin-top: 2px;">${escapeHtml(entryReason)}</div>`
+            : (rulesPassedCount ? `<div style="font-size: 9px; color: var(--text-muted); margin-top: 2px;">${rulesPassedCount} rules đạt</div>` : '');
+
+        // Current MCap if available
+        const currentMcap = pos.currentMarketCapSol || 0;
+        const mcapChange = pos.entryMarketCapSol > 0 && currentMcap > 0
+            ? ((currentMcap - pos.entryMarketCapSol) / pos.entryMarketCapSol * 100)
+            : null;
+
         row.innerHTML = `
             <div class="trade-icon buy">R</div>
             <div class="trade-info">
-                <div class="sym">${pos.symbol || shortenMint(pos.mint)}</div>
-                <div class="time">Mcap Vào: ${(pos.entryMarketCapSol || 0).toFixed(2)} SOL</div>
+                <div class="sym">${pos.symbol || shortenMint(pos.mint)}${entryTime ? ` <span style="font-size: 9px; color: var(--text-muted);">${entryTime}</span>` : ''}</div>
+                <div class="time">MC Vào: ${(pos.entryMarketCapSol || 0).toFixed(2)} SOL${currentMcap > 0 ? ` → ${currentMcap.toFixed(2)} SOL` : ''}</div>
+                ${entryDetail}
             </div>
             <div class="trade-amount">
                 <div class="sol">${(pos.buyAmountSol || 0).toFixed(3)} SOL</div>
                 <div class="pnl ${pnl >= 0 ? 'green' : 'red'}">${pnl >= 0 ? '+' : ''}${pnl.toFixed(1)}%</div>
+                ${mcapChange !== null ? `<div style="font-size: 9px; color: ${mcapChange >= 0 ? 'var(--green)' : 'var(--red)'};">MC ${mcapChange >= 0 ? '+' : ''}${mcapChange.toFixed(0)}%</div>` : ''}
             </div>
         `;
         

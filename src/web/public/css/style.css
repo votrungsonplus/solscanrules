@@ -1899,3 +1899,50 @@ input:checked + .slider::before { transform: translateX(18px); }
     border-color: var(--accent);
     box-shadow: 0 0 10px rgba(0, 243, 255, 0.2);
 }
+
+/* ═══════════════════════════════════════
+   ENHANCED UI — Data Freshness & Flash
+   ═══════════════════════════════════════ */
+
+/* Price flash animation */
+@keyframes flashGreen {
+    0% { background: transparent; }
+    30% { background: var(--green-dim); }
+    100% { background: transparent; }
+}
+@keyframes flashRed {
+    0% { background: transparent; }
+    30% { background: var(--red-dim); }
+    100% { background: transparent; }
+}
+.flash-green { animation: flashGreen 1.5s ease-out; }
+.flash-red { animation: flashRed 1.5s ease-out; }
+
+/* Enhanced buyers table — scrollable on overflow */
+.buyers-table-container {
+    overflow-x: auto;
+    margin-bottom: 20px;
+}
+
+/* Clickable trade rows */
+.trade-row { cursor: pointer; transition: background 0.15s ease; }
+.trade-row:hover { background: var(--bg-card-hover); }
+
+/* Position row enhanced */
+.position-row .trade-info { min-width: 0; flex: 1; }
+
+/* Stale data badge */
+.mini-badge[style*="background: var(--yellow)"] {
+    font-size: 8px;
+    padding: 1px 5px;
+}
+
+/* Holder detail table rows */
+.info-card table tr:hover {
+    background: var(--bg-card-hover);
+}
+
+/* Shared funder links */
+.info-card a:hover {
+    text-decoration: underline !important;
+}
