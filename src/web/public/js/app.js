@@ -460,7 +460,10 @@ function createFeedItem(token) {
     item.innerHTML = `
         <div class="feed-item-row">
             <span class="symbol">${symbol}<span class="name-dim">${tokenName ? ` / ${tokenName}` : ''}</span></span>
-            <span class="feed-badge ${statusClass}">${statusText}</span>
+            <div class="status-container">
+                <span class="feed-badge ${statusClass}">${statusText}</span>
+                <span class="block-reason"></span>
+            </div>
         </div>
         <div class="meta-row">
             <span class="mint-short">${shortenMint(mint)}</span>
@@ -504,7 +507,7 @@ function addTokenToFeed(token) {
     }
 }
 
-function updateFeedItemStatus(mint, status) {
+function updateFeedItemStatus(mint, status, ruleResult = null) {
     const item = feedItems.get(mint);
     if (!item) return;
 
@@ -525,6 +528,21 @@ function updateFeedItemStatus(mint, status) {
     } else {
         badge.className = 'feed-badge fail';
         badge.textContent = 'LOẠI';
+        
+        // Add reason note if available
+        const reasonEl = item.querySelector('.block-reason');
+        if (reasonEl) {
+            if (ruleResult?.blockReasons?.length > 0) {
+                reasonEl.textContent = `Chưa đạt ${ruleResult.blockReasons.length} đ/k`;
+                reasonEl.style.display = 'block';
+            } else if (ruleResult?.summary && ruleResult.summary.includes('Không đủ')) {
+                reasonEl.textContent = 'Thiếu ví mua';
+                reasonEl.style.display = 'block';
+            } else {
+                reasonEl.textContent = '';
+                reasonEl.style.display = 'none';
+            }
+        }
     }
 
     applyFilter();
@@ -772,7 +790,7 @@ socket.on('analysisResult', (data) => {
 
     // Update feed item status
     if (tokenData?.mint && ruleResult) {
-        updateFeedItemStatus(tokenData.mint, ruleResult.shouldBuy ? 'ELIGIBLE' : 'BLOCKED');
+        updateFeedItemStatus(tokenData.mint, ruleResult.shouldBuy ? 'ELIGIBLE' : 'BLOCKED', ruleResult);
     }
 
     // Update scanned counter (deduplicate)
@@ -809,7 +827,7 @@ socket.on('initialScans', (scans) => {
             }
         }
         if (scan.action_taken) {
-            updateFeedItemStatus(scan.mint, scan.action_taken);
+            updateFeedItemStatus(scan.mint, scan.action_taken, scan._analysisResult?.ruleResult);
         }
     }
     // Update passed counter from actual data (scanned counter is set by dailyStats from DB)
