@@ -87,6 +87,11 @@ class TradeTracker {
           logger.info(`Migration: Added ${columnName} to token_scans`);
         }
       }
+
+      if (!scanTableInfo.some(col => col.name === 'is_final')) {
+        this.db.exec(`ALTER TABLE token_scans ADD COLUMN is_final INTEGER DEFAULT 0;`);
+        logger.info(`Migration: Added is_final to token_scans`);
+      }
     } catch (err) {
       logger.error(`Scan migration failed: ${err.message}`);
     }
@@ -271,9 +276,10 @@ class TradeTracker {
           early_buyers_json,
           early_buyer_trades_json,
           action_taken,
+          is_final,
           timestamp
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
 
       stmt.run(
@@ -292,6 +298,7 @@ class TradeTracker {
         data.earlyBuyers ? JSON.stringify(data.earlyBuyers) : null,
         data.earlyBuyerTrades ? JSON.stringify(data.earlyBuyerTrades) : null,
         data.actionTaken || null,
+        data.isFinal ? 1 : 0,
         data.timestamp || Date.now()
       );
 
@@ -562,6 +569,18 @@ class TradeTracker {
     } catch (err) {
       logger.error(`Failed to get scan for mint: ${err.message}`);
       return null;
+    }
+  }
+
+  getScanCount(mint) {
+    if (!this.db) return 0;
+    try {
+      return this.db.prepare(`
+        SELECT COUNT(*) as count FROM token_scans WHERE mint = ?
+      `).get(mint).count || 0;
+    } catch (err) {
+      logger.error(`Failed to get scan count for mint: ${err.message}`);
+      return 0;
     }
   }
 

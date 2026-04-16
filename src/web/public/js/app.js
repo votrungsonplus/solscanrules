@@ -507,7 +507,7 @@ function addTokenToFeed(token) {
     }
 }
 
-function updateFeedItemStatus(mint, status, ruleResult = null) {
+function updateFeedItemStatus(mint, status, ruleResult = null, retryCount = 0, isFinal = false) {
     const item = feedItems.get(mint);
     if (!item) return;
 
@@ -532,11 +532,30 @@ function updateFeedItemStatus(mint, status, ruleResult = null) {
         // Add reason note if available
         const reasonEl = item.querySelector('.block-reason');
         if (reasonEl) {
+            let note = '';
             if (ruleResult?.blockReasons?.length > 0) {
-                reasonEl.textContent = `Chưa đạt ${ruleResult.blockReasons.length} đ/k`;
-                reasonEl.style.display = 'block';
+                note = `Chưa đạt ${ruleResult.blockReasons.length} đ/k`;
             } else if (ruleResult?.summary && ruleResult.summary.includes('Không đủ')) {
-                reasonEl.textContent = 'Thiếu ví mua';
+                note = 'Thiếu ví mua';
+            }
+
+            // Add retry info
+            const currentRetry = retryCount || ruleResult?.retryCount || 0;
+            if (currentRetry > 0) {
+                note += (note ? ' | ' : '') + `Lần ${currentRetry}`;
+            }
+
+            // Add final status
+            const currentIsFinal = isFinal || ruleResult?.isFinal;
+            if (currentIsFinal) {
+                note += ' ⏹️';
+                item.classList.add('is-final');
+            } else {
+                item.classList.remove('is-final');
+            }
+
+            if (note) {
+                reasonEl.textContent = note;
                 reasonEl.style.display = 'block';
             } else {
                 reasonEl.textContent = '';
@@ -790,7 +809,7 @@ socket.on('analysisResult', (data) => {
 
     // Update feed item status
     if (tokenData?.mint && ruleResult) {
-        updateFeedItemStatus(tokenData.mint, ruleResult.shouldBuy ? 'ELIGIBLE' : 'BLOCKED', ruleResult);
+        updateFeedItemStatus(tokenData.mint, ruleResult.shouldBuy ? 'ELIGIBLE' : 'BLOCKED', ruleResult, data.retryCount, data.isFinal);
     }
 
     // Update scanned counter (deduplicate)
@@ -818,8 +837,11 @@ socket.on('analysisResult', (data) => {
 // Initial scans load
 socket.on('initialScans', (scans) => {
     if (!scans || scans.length === 0) return;
+    // Server sends newest→oldest. Apply oldest→newest so the latest
+    // scan (including isFinal=true / highest retryCount) wins.
+    const ordered = Array.isArray(scans) ? [...scans].reverse() : [];
     // Update each feed item's status and populate dedup sets
-    for (const scan of scans) {
+    for (const scan of ordered) {
         if (scan.mint) {
             analyzedMints.add(scan.mint);
             if (scan.action_taken === 'ELIGIBLE') {
@@ -827,7 +849,7 @@ socket.on('initialScans', (scans) => {
             }
         }
         if (scan.action_taken) {
-            updateFeedItemStatus(scan.mint, scan.action_taken, scan._analysisResult?.ruleResult);
+            updateFeedItemStatus(scan.mint, scan.action_taken, scan._analysisResult?.ruleResult, scan._analysisResult?.retryCount, scan._analysisResult?.isFinal);
         }
     }
     // Update passed counter from actual data (scanned counter is set by dailyStats from DB)

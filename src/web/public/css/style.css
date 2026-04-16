@@ -398,11 +398,23 @@ body {
 
 .block-reason {
     font-size: 9px;
-    color: var(--text-muted);
+    color: var(--text-secondary);
     font-weight: 500;
     white-space: nowrap;
     display: none;
     margin-top: -2px;
+}
+
+.feed-item.is-final {
+    opacity: 0.85;
+}
+
+.feed-item.is-final[data-status="fail"] {
+    opacity: 0.6;
+}
+
+.feed-item.is-final[data-status="fail"]:hover {
+    opacity: 0.9;
 }
 
 .feed-item .meta-row {

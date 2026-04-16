@@ -42,6 +42,8 @@ class Orchestrator extends EventEmitter {
     this.holderStatsCache = new Map(); // mint -> { data, timestamp }
     this.pendingRechecks = new Map(); // mint -> timeout id
     this._safetyNetTimeouts = new Map(); // mint -> timeout id for 5s safety-net
+    this._rescanAttempts = new Map(); // mint -> number of rescan attempts triggered (for UI sync + debug)
+    this._recheckInterval = 5000; // default gap between rechecks (ms)
   }
 
   async _loadTokenAccountOwners(accounts) {
@@ -137,16 +139,37 @@ class Orchestrator extends EventEmitter {
     }
 
     this._clearPendingRecheck(mint);
-    logger.info(`🔄 ${tokenData.symbol || shortenAddress(mint)} ${reason} (${ageMinutes.toFixed(1)}m/${maxAge}m). Re-scan sau ${Math.round(delayMs / 1000)}s...`);
+    const plannedAttempts = (this._rescanAttempts.get(mint) || 0) + 1;
+    logger.info(`🔄 ${tokenData.symbol || shortenAddress(mint)} ${reason} (${ageMinutes.toFixed(1)}m/${maxAge}m). Re-scan #${plannedAttempts} sau ${Math.round(delayMs / 1000)}s...`);
 
     const timeoutId = setTimeout(() => {
       this.pendingRechecks.delete(mint);
-      if (this.tokenData.has(mint) && !this.passedTokens.has(mint) && !this.processingTokens.has(mint)) {
-        this.processingTokens.add(mint);
-        if (!this._analysisQueue) this._analysisQueue = [];
-        this._analysisQueue.push(mint);
-        this._processAnalysisQueue();
+
+      const tk = this.tokenData.get(mint);
+      if (!tk || this.passedTokens.has(mint)) return;
+
+      // Re-verify age at fire time — age may have exceeded limit while waiting
+      const ageNowMin = (Date.now() - tk.timestamp) / 60000;
+      const maxAgeNow = this._getMaxAgeMinutes();
+      if (ageNowMin >= maxAgeNow) {
+        logger.info(`⏹️ ${tk.symbol || shortenAddress(mint)} hết tuổi khi đến lượt re-check (${ageNowMin.toFixed(1)}m/${maxAgeNow}m).`);
+        return;
       }
+
+      // If another analysis is running for this token, DO NOT drop — reschedule
+      if (this.processingTokens.has(mint)) {
+        logger.debug(`🔁 ${tk.symbol || shortenAddress(mint)}: analysis đang chạy, hoãn re-scan thêm ${Math.round(this._recheckInterval / 1000)}s`);
+        this._scheduleRecheck(mint, this._recheckInterval, 'analysis đang bận — chờ lượt tiếp');
+        return;
+      }
+
+      // Increment attempt counter (actual trigger, not just scheduled)
+      this._rescanAttempts.set(mint, (this._rescanAttempts.get(mint) || 0) + 1);
+
+      this.processingTokens.add(mint);
+      if (!this._analysisQueue) this._analysisQueue = [];
+      this._analysisQueue.push(mint);
+      this._processAnalysisQueue();
     }, delayMs);
 
     this.pendingRechecks.set(mint, timeoutId);
@@ -1171,6 +1194,11 @@ class Orchestrator extends EventEmitter {
         earlyBuyerTrades,
         globalFee: this.tokenGlobalFees.get(mint) || 0,
         solPrice, // Include current solPrice for frontend sync
+        retryCount: Math.max(
+          tracker.getScanCount(mint) + 1,
+          (this._rescanAttempts.get(mint) || 0) + 1
+        ),
+        isFinal: (ruleResult.shouldBuy && hasEnoughBuyers) || ((Date.now() - tokenData.timestamp) / 60000 >= this._getMaxAgeMinutes()),
       });
 
       // 8. Record scan
@@ -1190,6 +1218,7 @@ class Orchestrator extends EventEmitter {
         earlyBuyers: buyerAnalyses,
         earlyBuyerTrades,
         actionTaken: ruleResult.shouldBuy ? 'ELIGIBLE' : 'BLOCKED',
+        isFinal: (ruleResult.shouldBuy && hasEnoughBuyers) || ((Date.now() - tokenData.timestamp) / 60000 >= this._getMaxAgeMinutes()),
         timestamp: Date.now(),
       });
       this.analyzedTokens.add(mint);
@@ -1269,6 +1298,25 @@ class Orchestrator extends EventEmitter {
         } else {
           this._clearPendingRecheck(mint);
           logger.info(`❌ ${tokenData.symbol}: ${ruleResult.summary} (Ngưng quét, tuổi: ${ageMinutes.toFixed(1)}m)`);
+          
+          // Emit one last result marked as final if it's the one that hit the age limit
+          webServer.emit('analysisResult', {
+            tokenData: { ...tokenData, bondingCurveProgress, analysisTimestamp: Date.now() },
+            ruleResult,
+            devAnalysis,
+            tokenScore,
+            holderStats,
+            clusterAnalysis,
+            earlyBuyers: buyerAnalyses,
+            earlyBuyerTrades,
+            globalFee: this.tokenGlobalFees.get(mint) || 0,
+            solPrice,
+            retryCount: Math.max(
+              tracker.getScanCount(mint),
+              (this._rescanAttempts.get(mint) || 0) + 1
+            ),
+            isFinal: true,
+          });
         }
       }
     } catch (err) {
@@ -1337,6 +1385,48 @@ class Orchestrator extends EventEmitter {
     setInterval(() => {
       this._cleanupOldTokens();
     }, 60000); // Check every minute
+
+    // Guard timer: every 15s, ensure every not-yet-final token under maxAge
+    // has either a pending recheck, is currently processing, or is queued.
+    // Recovers from any dropped/lost setTimeout (e.g., process was busy).
+    setInterval(() => {
+      try {
+        this._guardRechecks();
+      } catch (err) {
+        logger.debug(`Guard recheck sweep failed: ${err.message}`);
+      }
+    }, 15000);
+  }
+
+  /**
+   * BUG RS3 guard: sweep tokenData and reschedule any token that is
+   * - still under maxAge
+   * - not yet passed / not in a final state
+   * - has no pending recheck, not processing, not queued
+   * This prevents tokens from getting stuck with only 1 scan when a
+   * scheduled recheck was silently dropped.
+   */
+  _guardRechecks() {
+    if (this.isPaused) return;
+    const maxAge = this._getMaxAgeMinutes();
+    const now = Date.now();
+
+    for (const [mint, token] of this.tokenData.entries()) {
+      if (this.passedTokens.has(mint)) continue;
+      if (this.processingTokens.has(mint)) continue;
+      if (this.pendingRechecks.has(mint)) continue;
+      if (this._analysisQueue && this._analysisQueue.includes(mint)) continue;
+
+      const ageMinutes = (now - token.timestamp) / 60000;
+      if (ageMinutes >= maxAge) continue; // aged out — leave to cleanup
+
+      // Only rescue tokens that already produced at least one analysis;
+      // brand-new tokens are driven by their own init path.
+      if (!this.analyzedTokens.has(mint)) continue;
+
+      logger.warn(`🛟 Guard: ${token.symbol || shortenAddress(mint)} thiếu re-check (${ageMinutes.toFixed(1)}m/${maxAge}m) — reschedule.`);
+      this._scheduleRecheck(mint, this._recheckInterval, 'guard timer phát hiện thiếu re-check');
+    }
   }
 
   /**
@@ -1379,6 +1469,7 @@ class Orchestrator extends EventEmitter {
         this.tokenEarlyBuyers.delete(mint);
         this.tokenGlobalFees.delete(mint);
         this.holderStatsCache.delete(mint);
+        this._rescanAttempts.delete(mint);
       }
     }
 
@@ -2053,6 +2144,7 @@ class Orchestrator extends EventEmitter {
         this.analyzedTokens.delete(mint);
         this.processingTokens.delete(mint);
         this.holderStatsCache.delete(mint);
+        this._rescanAttempts.delete(mint);
         detector.unsubscribeFromToken(mint);
       }
     }
