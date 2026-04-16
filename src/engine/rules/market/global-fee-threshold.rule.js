@@ -7,14 +7,17 @@ module.exports = () => ({
   enabled: true,
   type: 'REQUIRE',
   minGlobalFee: settings.rules.minGlobalFee,
+  retryable: true,
   evaluate: (ctx) => {
     const { tokenData } = ctx;
     const threshold = ctx.rule?.minGlobalFee || settings.rules.minGlobalFee;
     const currentFee = tokenData.globalFee || (tokenData.volume ? tokenData.volume / 100 : 0);
+    const passed = currentFee >= threshold;
 
     return {
-      passed: currentFee >= threshold,
-      reason: currentFee >= threshold
+      passed,
+      retryable: !passed,
+      reason: passed
         ? `Global fee ${currentFee.toFixed(4)} SOL >= ${threshold}`
         : `Global fee ${currentFee.toFixed(4)} SOL < ${threshold}`,
     };

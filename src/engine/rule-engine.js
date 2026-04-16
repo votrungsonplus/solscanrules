@@ -155,8 +155,8 @@ class RuleEngine {
       summary: shouldBuy
         ? `✅ ĐẠT — Thoả mãn tất cả điều kiện${alertReasons.length > 0 ? ` (${alertReasons.length} cảnh báo)` : ''}`
         : onlyRetryableFailed
-          ? `⏳ CHỜ — Chỉ chưa đạt MCap, đang chờ tăng...`
-          : `❌ KHÔNG ĐẠT — ${blockReasons.length} điều kiện bắt buộc không thoả`,
+          ? `⏳ CHỜ — ${blockReasons.length} điều kiện chưa đạt nhưng có thể thay đổi, đang quét lại mỗi 5s...`
+          : `❌ KHÔNG ĐẠT — ${blockReasons.length} điều kiện bắt buộc không thoả (quét lại mỗi 5s tới khi hết tuổi)`,
     };
   }
 

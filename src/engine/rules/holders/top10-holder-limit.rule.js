@@ -7,6 +7,7 @@ module.exports = () => ({
   enabled: true,
   type: 'REQUIRE',
   maxPercent: settings.rules.maxPercentTop10,
+  retryable: true,
   evaluate: (ctx) => {
     const { holderStats } = ctx;
     if (!holderStats) return { passed: false, reason: '⚠️ Không có dữ liệu holder để đánh giá Top 10' };
@@ -21,6 +22,7 @@ module.exports = () => ({
 
     return {
       passed,
+      retryable: !passed,
       reason: passed
         ? `Top 10 nắm ${actual.toFixed(1)}% supply${holderStats.top10CirculatingPercent ? ` (Circulating: ${holderStats.top10CirculatingPercent.toFixed(1)}%)` : ''} (< ${max}%)${holderStats.preliminary ? ' | preliminary' : ''}${typeof ownersActual === 'number' ? ` | Owners: ${ownersActual.toFixed(1)}%` : ''}`
         : `Top 10 nắm quá cao: ${actual.toFixed(1)}% supply${holderStats.top10CirculatingPercent ? ` (Circulating: ${holderStats.top10CirculatingPercent.toFixed(1)}%)` : ''} (> ${max}%)${holderStats.preliminary ? ' | preliminary' : ''}${typeof ownersActual === 'number' ? ` | Owners: ${ownersActual.toFixed(1)}%` : ''}`,

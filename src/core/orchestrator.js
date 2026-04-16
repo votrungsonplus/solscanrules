@@ -1257,13 +1257,14 @@ class Orchestrator extends EventEmitter {
         const maxAge = this._getMaxAgeMinutes();
         this.processingTokens.delete(mint);
 
+        // Re-scan liên tục mỗi 8s cho tới khi hết tuổi — dữ liệu token thay đổi liên tục
         if (!this.passedTokens.has(mint) && ageMinutes < maxAge) {
           this._scheduleRecheck(
             mint,
             5000,
             ruleResult.onlyRetryableFailed
-              ? 'chỉ còn điều kiện retryable chưa đạt'
-              : 'chưa đạt điều kiện nhưng vẫn còn trong tuổi cho phép'
+              ? 'chỉ còn điều kiện retryable chưa đạt — quét lại với dữ liệu mới'
+              : 'chưa đạt điều kiện — quét lại với dữ liệu mới mỗi 5s'
           );
         } else {
           this._clearPendingRecheck(mint);
@@ -1291,7 +1292,7 @@ class Orchestrator extends EventEmitter {
         logger.error(`Failed to persist analysis error for ${shortenAddress(mint)}: ${dbErr.message}`);
       }
       this.processingTokens.delete(mint);
-      this._scheduleRecheck(mint, 8000, 'gặp lỗi phân tích tạm thời');
+      this._scheduleRecheck(mint, 5000, 'gặp lỗi phân tích tạm thời');
     } finally {
       this.processingTokens.delete(mint);
 

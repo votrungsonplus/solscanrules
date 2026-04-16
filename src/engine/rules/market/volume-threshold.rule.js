@@ -7,6 +7,7 @@ module.exports = () => ({
   enabled: true,
   type: 'REQUIRE',
   minVol: settings.rules.minVol,
+  retryable: true,
   evaluate: (ctx) => {
     const { tokenData } = ctx;
     const actual = tokenData.volume || (tokenData.globalFee || 0) * 100;
@@ -15,6 +16,7 @@ module.exports = () => ({
 
     return {
       passed,
+      retryable: !passed,
       reason: passed
         ? `Vol hiện tại ${actual.toFixed(1)} SOL (Đạt mức > ${min} SOL)`
         : `Vol quá thấp: ${actual.toFixed(1)} SOL (Chưa đạt ${min} SOL)`,
