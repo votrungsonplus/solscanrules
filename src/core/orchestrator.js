@@ -949,6 +949,47 @@ class Orchestrator extends EventEmitter {
     // For manual refreshes (isManual), we allow proceeding to check current stats.
     if (!tokenData.isManual && (!earlyBuyers || earlyBuyers.length === 0)) {
       this.processingTokens.delete(mint);
+
+      // Keep UI in sync on rescans even when no buyers arrived yet.
+      // Without this emit, the feed card's "Lần N" counter stays at the last
+      // value (usually 1) even though the rescan scheduler keeps firing. The
+      // user sees "đang chờ vài phút" and thinks the bot stopped — emitting
+      // a lightweight waiting-for-buyers result every tick solves that.
+      try {
+        const ageMinutes = (Date.now() - tokenData.timestamp) / 60000;
+        const maxAge = this._getMaxAgeMinutes();
+        const isAgedOut = ageMinutes >= maxAge;
+        const required = settings.monitoring.earlyBuyersToMonitor;
+        const attempt = Math.max(
+          tracker.getScanCount(mint),
+          (this._rescanAttempts.get(mint) || 0) + 1
+        );
+
+        webServer.emit('analysisResult', {
+          tokenData: { ...tokenData, analysisTimestamp: Date.now() },
+          ruleResult: {
+            shouldBuy: false,
+            summary: `Không đủ ví mua: 0/${required} sau ${ageMinutes.toFixed(1)} phút.`,
+            results: [{
+              ruleId: 'preliminary_buyers',
+              ruleName: 'Ví mua sớm',
+              ruleType: 'PRE-SCAN',
+              passed: false,
+              reason: `Chưa có ví mua nào (0/${required}) — đang chờ giao dịch đầu tiên.`,
+            }],
+            onlyRetryableFailed: !isAgedOut,
+          },
+          earlyBuyers: [],
+          earlyBuyerTrades: [],
+          globalFee: this.tokenGlobalFees.get(mint) || 0,
+          solPrice: priceService.solPrice || 150,
+          retryCount: attempt,
+          isFinal: isAgedOut,
+        });
+      } catch (emitErr) {
+        logger.debug(`Waiting-state emit failed for ${shortenAddress(mint)}: ${emitErr.message}`);
+      }
+
       return;
     }
 
@@ -1356,30 +1397,52 @@ class Orchestrator extends EventEmitter {
       // If token is > X mins old and hasn't been analyzed yet
       if (now - token.timestamp > durationMs && !this.analyzedTokens.has(mint) && !this.processingTokens.has(mint)) {
         const buyers = this.tokenEarlyBuyers.get(mint) || [];
-        
+
         logger.info(`⏹️ Timeout: ${token.symbol} (${shortenAddress(mint)}) only got ${buyers.length}/${settings.monitoring.earlyBuyersToMonitor} buyers. Recording FAIL.`);
-        
+
+        const finalRuleResult = {
+          shouldBuy: false,
+          summary: `Bị loại: Không đủ ${settings.monitoring.earlyBuyersToMonitor} ví mua sớm trong 5 phút.`,
+          results: [
+            { ruleId: 'preliminary_buyers', ruleName: 'Ví mua sớm', ruleType: 'PRE-SCAN', passed: false, reason: `Chỉ có ${buyers.length}/${settings.monitoring.earlyBuyersToMonitor} ví mua trong thời gian theo dõi.` },
+            { ruleId: 'preliminary_timeout', ruleName: 'Thời gian chờ', ruleType: 'PRE-SCAN', passed: false, reason: `Quá hạn theo dõi (${Math.floor(durationMs/60000)} phút).` }
+          ]
+        };
+
         // Record as detailed FAIL
         tracker.recordScan({
           mint,
           tokenName: token.name,
           tokenSymbol: token.symbol,
           deployer: token.deployer,
-          ruleResult: {
-            shouldBuy: false,
-            summary: `Bị loại: Không đủ ${settings.monitoring.earlyBuyersToMonitor} ví mua sớm trong 5 phút.`,
-            results: [
-              { ruleId: 'preliminary_buyers', ruleName: 'Ví mua sớm', ruleType: 'PRE-SCAN', passed: false, reason: `Chỉ có ${buyers.length}/${settings.monitoring.earlyBuyersToMonitor} ví mua trong thời gian theo dõi.` },
-              { ruleId: 'preliminary_timeout', ruleName: 'Thời gian chờ', ruleType: 'PRE-SCAN', passed: false, reason: `Quá hạn theo dõi (${Math.floor(durationMs/60000)} phút).` }
-            ]
-          },
+          ruleResult: finalRuleResult,
           actionTaken: 'BLOCKED',
+          isFinal: true,
           timestamp: Date.now()
         });
 
+        // Emit final state to UI so retry counter shows ⏹️ and stops updating
+        try {
+          webServer.emit('analysisResult', {
+            tokenData: { ...token, analysisTimestamp: Date.now() },
+            ruleResult: finalRuleResult,
+            earlyBuyers: [],
+            earlyBuyerTrades: [],
+            globalFee: this.tokenGlobalFees.get(mint) || 0,
+            solPrice: priceService.solPrice || 150,
+            retryCount: Math.max(
+              tracker.getScanCount(mint),
+              (this._rescanAttempts.get(mint) || 0) + 1
+            ),
+            isFinal: true,
+          });
+        } catch (emitErr) {
+          logger.debug(`Final-state emit failed for ${shortenAddress(mint)}: ${emitErr.message}`);
+        }
+
         // Mark as analyzed so we don't process it again
         this.analyzedTokens.add(mint);
-        
+
         // Clean up memory
         this.tokenData.delete(mint);
         this.tokenEarlyBuyers.delete(mint);
