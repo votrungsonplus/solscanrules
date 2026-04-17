@@ -30,6 +30,41 @@ function clearSearchTimeout() {
     }
 }
 
+/**
+ * Yêu cầu phân tích cho một mint (dùng chung cho click feed + search).
+ * Hiện loading ngay, set timeout 20s, và đánh dấu mint đang chờ để các listener
+ * `analysisLoading` / `analysisError` / `analysisResult` biết đây là yêu cầu chủ động.
+ */
+function requestAnalysisForMint(mint, { tokenName = '', tokenSymbol = '', loadingMessage } = {}) {
+    if (!mint) return;
+    selectedMint = mint;
+    _searchActiveMint = mint;
+
+    const symbol = tokenSymbol || '???';
+    const message = loadingMessage
+        || (tokenName ? `Đang lấy dữ liệu cho ${symbol} — ${tokenName}…` : 'Đang tra cứu dữ liệu on-chain + DexScreener…');
+
+    renderAnalysisPlaceholder('loading', {
+        title: `Đang phân tích ${symbol}`,
+        message,
+        mint,
+    });
+
+    socket.emit('getAnalysis', mint);
+
+    clearSearchTimeout();
+    _searchTimeoutId = setTimeout(() => {
+        if (_searchActiveMint === mint) {
+            renderAnalysisPlaceholder('error', {
+                title: 'Không có phản hồi',
+                message: 'Máy chủ không trả dữ liệu sau 20 giây. Thử nhấn "Cập nhật trạng thái" hoặc kiểm tra token trên DexScreener.',
+                mint,
+            });
+            _searchActiveMint = null;
+        }
+    }, SEARCH_TIMEOUT_MS);
+}
+
 // ═══════════════════════════════════════
 // TOKEN FEED
 // ═══════════════════════════════════════
@@ -71,10 +106,12 @@ function createFeedItem(token) {
     `;
 
     item.addEventListener('click', () => {
-        selectedMint = token.mint;
         $$('.feed-item').forEach(i => i.classList.remove('active'));
         item.classList.add('active');
-        socket.emit('getAnalysis', token.mint);
+        requestAnalysisForMint(token.mint, {
+            tokenSymbol: token.symbol,
+            tokenName: token.name,
+        });
     });
 
     return item;
@@ -255,26 +292,9 @@ function handleSearch() {
         return;
     }
 
-    selectedMint = mint;
-    _searchActiveMint = mint;
-    renderAnalysisPlaceholder('loading', {
-        title: 'Đang phân tích token',
-        message: 'Đang tra cứu dữ liệu on-chain + DexScreener…',
-        mint,
+    requestAnalysisForMint(mint, {
+        loadingMessage: 'Đang tra cứu dữ liệu on-chain + DexScreener…',
     });
-    socket.emit('getAnalysis', mint);
-
-    clearSearchTimeout();
-    _searchTimeoutId = setTimeout(() => {
-        if (_searchActiveMint === mint) {
-            renderAnalysisPlaceholder('error', {
-                title: 'Không có phản hồi',
-                message: 'Máy chủ không trả dữ liệu sau 20 giây. Thử lại hoặc kiểm tra token trên DexScreener.',
-                mint,
-            });
-            _searchActiveMint = null;
-        }
-    }, SEARCH_TIMEOUT_MS);
 }
 
 function requestPassedTokenInfo(tokenOrMint) {

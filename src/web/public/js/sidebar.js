@@ -187,8 +187,9 @@ socket.on('tradeHistory', (trades) => {
         `;
         row.addEventListener('click', () => {
             if (trade.mint) {
-                selectedMint = trade.mint;
-                socket.emit('getAnalysis', trade.mint);
+                requestAnalysisForMint(trade.mint, {
+                    tokenSymbol: trade.token_symbol,
+                });
             }
         });
         tradeHistoryContainer.appendChild(row);
@@ -264,8 +265,9 @@ function updateRealPositions(positions) {
         `;
 
         row.addEventListener('click', () => {
-            selectedMint = pos.mint;
-            socket.emit('getAnalysis', pos.mint);
+            requestAnalysisForMint(pos.mint, {
+                tokenSymbol: pos.tokenSymbol,
+            });
         });
 
         container.appendChild(row);
