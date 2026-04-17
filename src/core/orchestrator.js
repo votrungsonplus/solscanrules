@@ -28,6 +28,7 @@ const telegram = require('../telegram/telegram-bot');
 const tracker = require('../tracker/trade-tracker');
 const webServer = require('../web/server');
 const priceService = require('../services/price-service');
+const RescanScheduler = require('./rescan-scheduler');
 
 class Orchestrator extends EventEmitter {
   constructor() {
@@ -40,10 +41,12 @@ class Orchestrator extends EventEmitter {
     this.passedTokens = new Set(); // tokens that successfully passed all rules
     this.analyzedTokens = new Set(); // track ALL tokens recorded to scans (pass or fail)
     this.holderStatsCache = new Map(); // mint -> { data, timestamp }
-    this.pendingRechecks = new Map(); // mint -> timeout id
+    this.pendingRechecks = new Map(); // legacy — kept for backward-compat cleanup
     this._safetyNetTimeouts = new Map(); // mint -> timeout id for 5s safety-net
     this._rescanAttempts = new Map(); // mint -> number of rescan attempts triggered (for UI sync + debug)
-    this._recheckInterval = 5000; // default gap between rechecks (ms)
+    this._recheckInterval = 5000; // legacy fallback
+    this._analysisQueue = [];
+    this.rescanScheduler = new RescanScheduler(this);
   }
 
   async _loadTokenAccountOwners(accounts) {
@@ -120,6 +123,7 @@ class Orchestrator extends EventEmitter {
   }
 
   _clearPendingRecheck(mint) {
+    this.rescanScheduler.cancel(mint);
     const pending = this.pendingRechecks.get(mint);
     if (pending) {
       clearTimeout(pending);
@@ -127,52 +131,8 @@ class Orchestrator extends EventEmitter {
     }
   }
 
-  _scheduleRecheck(mint, delayMs, reason) {
-    const tokenData = this.tokenData.get(mint);
-    if (!tokenData || this.passedTokens.has(mint)) return;
-
-    const ageMinutes = (Date.now() - tokenData.timestamp) / 60000;
-    const maxAge = this._getMaxAgeMinutes();
-    if (ageMinutes >= maxAge) {
-      logger.info(`⏹️ ${tokenData.symbol || shortenAddress(mint)} hết tuổi re-check (${ageMinutes.toFixed(1)}m/${maxAge}m).`);
-      return;
-    }
-
-    this._clearPendingRecheck(mint);
-    const plannedAttempts = (this._rescanAttempts.get(mint) || 0) + 1;
-    logger.info(`🔄 ${tokenData.symbol || shortenAddress(mint)} ${reason} (${ageMinutes.toFixed(1)}m/${maxAge}m). Re-scan #${plannedAttempts} sau ${Math.round(delayMs / 1000)}s...`);
-
-    const timeoutId = setTimeout(() => {
-      this.pendingRechecks.delete(mint);
-
-      const tk = this.tokenData.get(mint);
-      if (!tk || this.passedTokens.has(mint)) return;
-
-      // Re-verify age at fire time — age may have exceeded limit while waiting
-      const ageNowMin = (Date.now() - tk.timestamp) / 60000;
-      const maxAgeNow = this._getMaxAgeMinutes();
-      if (ageNowMin >= maxAgeNow) {
-        logger.info(`⏹️ ${tk.symbol || shortenAddress(mint)} hết tuổi khi đến lượt re-check (${ageNowMin.toFixed(1)}m/${maxAgeNow}m).`);
-        return;
-      }
-
-      // If another analysis is running for this token, DO NOT drop — reschedule
-      if (this.processingTokens.has(mint)) {
-        logger.debug(`🔁 ${tk.symbol || shortenAddress(mint)}: analysis đang chạy, hoãn re-scan thêm ${Math.round(this._recheckInterval / 1000)}s`);
-        this._scheduleRecheck(mint, this._recheckInterval, 'analysis đang bận — chờ lượt tiếp');
-        return;
-      }
-
-      // Increment attempt counter (actual trigger, not just scheduled)
-      this._rescanAttempts.set(mint, (this._rescanAttempts.get(mint) || 0) + 1);
-
-      this.processingTokens.add(mint);
-      if (!this._analysisQueue) this._analysisQueue = [];
-      this._analysisQueue.push(mint);
-      this._processAnalysisQueue();
-    }, delayMs);
-
-    this.pendingRechecks.set(mint, timeoutId);
+  _scheduleRecheck(mint, _delayMs, reason) {
+    this.rescanScheduler.schedule(mint, { reason });
   }
 
   /**
@@ -303,6 +263,9 @@ class Orchestrator extends EventEmitter {
 
     // 8. Start cleanup timer for "Timed out" tokens
     this._startCleanupTimer();
+
+    // Start dynamic rescan scheduler (replaces static setTimeout rechecks)
+    this.rescanScheduler.start();
 
     logger.info('Bot is now running and monitoring PumpFun...');
     logger.info(`Auto-buy: ${settings.trading.autoBuyEnabled ? 'ON' : 'OFF'}`);
@@ -512,6 +475,8 @@ class Orchestrator extends EventEmitter {
       // processingTokens tracks "currently being analyzed" — cleared after each analysis
       // passedTokens tracks "already confirmed" — no more re-analysis needed
       if (!this.passedTokens.has(mint) && !this.processingTokens.has(mint)) {
+        // Count this as a rescan attempt so UI shows correct count
+        this._rescanAttempts.set(mint, (this._rescanAttempts.get(mint) || 0) + 1);
         this.processingTokens.add(mint);
         if (!this._analysisQueue) this._analysisQueue = [];
         // Avoid duplicate entries in queue
@@ -698,59 +663,8 @@ class Orchestrator extends EventEmitter {
         };
       };
 
-      const tokenAgeMs = Math.max(0, Date.now() - (tokenTimestamp || Date.now()));
-      const useFastPath = tokenAgeMs < 60000;
-
-      // Fast path for fresh launches: still classify owners, but do it via batched account loads
-      // so we can hide bonding/PDA/program-controlled wallets from "real holder" stats.
-      if (useFastPath) {
-        const {
-          filteredAccounts,
-          filteredBondingCurveBalance: bondingCurveBalance,
-          filteredFunctionalCount,
-        } = filterRealHolderAccounts(parsedTokenAccounts);
-
-        const circulatingSupply = Math.max(0.0001, supply - bondingCurveBalance);
-        const top10 = [...filteredAccounts]
-          .sort((a, b) => b.amount - a.amount)
-          .slice(0, 10);
-        const top10Total = top10.reduce((sum, acc) => sum + acc.amount, 0);
-        const ownerBalances = new Map();
-        for (const acc of filteredAccounts) {
-          const ownerKey = acc.owner || acc.addr;
-          ownerBalances.set(ownerKey, (ownerBalances.get(ownerKey) || 0) + acc.amount);
-        }
-        const top10OwnersTotal = [...ownerBalances.values()]
-          .sort((a, b) => b - a)
-          .slice(0, 10)
-          .reduce((sum, amount) => sum + amount, 0);
-
-        const preliminary = {
-          supply,
-          top10Percent: supply > 0 ? (top10Total / supply) * 100 : 0,
-          top10CirculatingPercent: circulatingSupply > 0 ? (top10Total / circulatingSupply) * 100 : 0,
-          top10OwnersPercent: supply > 0 ? (top10OwnersTotal / supply) * 100 : 0,
-          top10OwnersCirculatingPercent: circulatingSupply > 0 ? (top10OwnersTotal / circulatingSupply) * 100 : 0,
-          bundleHoldPercent: 0,
-          earlyBuyerHoldPercent: 0,
-          devHoldPercent: 0,
-          circulatingSupply,
-          bondingCurveBalance,
-          realHolderCount: filteredAccounts.length,
-          filteredFunctionalCount,
-          axiomRouteAddress: bondingCurvePDA.toBase58(),
-          topHolders: top10.map((t) => ({
-            address: t.addr,
-            owner: t.owner,
-            percent: Math.min((t.amount / supply) * 100, 100),
-          })),
-          preliminary: true,
-          dataInvalid: false,
-        };
-
-        this.holderStatsCache.set(mint, { data: preliminary, timestamp: Date.now() });
-        return preliminary;
-      }
+      // === Always compute full stats (bundle/early/dev %) — with 16 RPCs we have enough throughput
+      // that the old age<60s fast-path was causing retryable rules to fail forever on fresh tokens.
 
       // === Separate bonding/system from holder accounts ===
       // Program-controlled / PDA-controlled wallets are not shown as real holders.
@@ -1129,8 +1043,9 @@ class Orchestrator extends EventEmitter {
       // === Synchronize Market Cap calculation with Migration Check ===
       const solPrice = await priceService.getSolPrice() || 150;
       
-      // If bonding curve is near completion (>80%) or token is older (>10m), try DexScreener for migrated price
-      if (bondingCurveProgress > 80 || (Date.now() - tokenData.timestamp > 600000)) {
+      // DexScreener fetch: near-migration OR age>60s (parallel path keeps main pipeline fast,
+      // early fetch catches migrated tokens that otherwise sit idle for 10+ minutes).
+      if (bondingCurveProgress > 80 || (Date.now() - tokenData.timestamp > 60000)) {
         try {
           const pairs = await priceService.getTokensData([mint]);
           const bestPair = priceService.selectBestPairForMint(pairs, mint);
@@ -1356,6 +1271,7 @@ class Orchestrator extends EventEmitter {
         const maxAge = this._getMaxAgeMinutes();
         if (ageMinutes < maxAge) {
           logger.info(`🔄 ${tokenData.symbol}: ${currentBuyers.length - buyerCountAtStart} buyer(s) mới đến trong lúc phân tích (${buyerCountAtStart}→${currentBuyers.length}). Re-queue ngay.`);
+          this._rescanAttempts.set(mint, (this._rescanAttempts.get(mint) || 0) + 1);
           this.processingTokens.add(mint);
           if (!this._analysisQueue) this._analysisQueue = [];
           if (!this._analysisQueue.includes(mint)) {
