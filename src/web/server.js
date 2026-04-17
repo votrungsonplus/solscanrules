@@ -67,7 +67,7 @@ class WebServer {
         clusterAnalysis: safeParseJson(scan.cluster_analysis_json, null),
         earlyBuyers: safeParseJson(scan.early_buyers_json, null),
         earlyBuyerTrades: safeParseJson(scan.early_buyer_trades_json, null),
-        retryCount: tracker.getScanCount(scan.mint),
+        retryCount: scan.scan_index || tracker.getScanCount(scan.mint),
         isFinal: scan.is_final === 1,
         ...overrides.root,
       };

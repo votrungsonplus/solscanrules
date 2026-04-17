@@ -2,6 +2,11 @@ const axios = require('axios');
 const logger = require('../utils/logger');
 
 class TokenScorer {
+  constructor() {
+    this._uriCache = new Map(); // uri -> score (persistent per-process)
+    this._uriCacheMaxSize = 2000;
+  }
+
   /**
    * Score token metadata quality (0-100)
    * Higher score = more likely legitimate project
@@ -17,9 +22,9 @@ class TokenScorer {
       earlyBuyers: earlyBuyers ? this._scoreEarlyBuyers(earlyBuyers) : 0,
     };
 
-    // Fetch and score URI metadata if available
+    // Fetch and score URI metadata if available (cached — IPFS is slow + immutable)
     if (tokenData.uri) {
-      scores.metadata += await this._scoreUriMetadata(tokenData.uri);
+      scores.metadata += await this._scoreUriMetadataCached(tokenData.uri);
     }
 
     const totalScore = Math.min(
@@ -155,6 +160,18 @@ class TokenScorer {
     else if (avgTxCount >= 10) score += 5;
 
     return Math.max(0, Math.min(score, 100));
+  }
+
+  async _scoreUriMetadataCached(uri) {
+    if (this._uriCache.has(uri)) return this._uriCache.get(uri);
+    const score = await this._scoreUriMetadata(uri);
+    if (this._uriCache.size >= this._uriCacheMaxSize) {
+      // Drop oldest entry (FIFO approximation via first inserted key)
+      const firstKey = this._uriCache.keys().next().value;
+      if (firstKey) this._uriCache.delete(firstKey);
+    }
+    this._uriCache.set(uri, score);
+    return score;
   }
 
   /**
