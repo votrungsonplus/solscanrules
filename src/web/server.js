@@ -539,28 +539,41 @@ class WebServer {
         }
       });
 
-      // Manual refresh
-      socket.on('manualRefresh', (mint) => {
+      // ── Manual refresh helpers ──
+      // Both `manualRefresh` and `refreshPassedTokenInfo` trigger the same
+      // pipeline (orchestrator.manualTokenRefresh) which fetches market data,
+      // recovers deployer on-chain, recovers historical buyers, and runs full
+      // analysis (emits `analysisResult` when done). The only difference is
+      // that `refreshPassedTokenInfo` ALSO emits a `refreshPassedTokenInfoStatus`
+      // ack so the "Update Status" button in the passed-info card can stop
+      // spinning even before the full analysis arrives.
+      const triggerManualRefresh = (mint, label) => {
+        logger.info(`Web action: ${label} for ${mint}`);
         const orchestrator = require('../core/orchestrator');
-        orchestrator.manualTokenRefresh(mint);
-        logger.info(`Web action: Manual refresh requested for ${mint}`);
+        return orchestrator.manualTokenRefresh(mint);
+      };
+
+      socket.on('manualRefresh', (mint) => {
+        try {
+          triggerManualRefresh(mint, 'Manual refresh');
+        } catch (err) {
+          logger.error(`Manual refresh failed for ${mint}: ${err.message}`);
+        }
       });
 
       socket.on('refreshPassedTokenInfo', async (mint) => {
-        logger.info(`Web action: Update Status requested for ${mint}`);
         try {
-          const orchestrator = require('../core/orchestrator');
-          
-          // Trigger the robust revival pipeline
-          // This will fetch market data, recover deployer on-chain, 
-          // recover buyers on-chain, and run full analysis.
-          orchestrator.manualTokenRefresh(mint);
-
-          socket.emit('refreshPassedTokenInfoStatus', { success: true, message: 'Status recovery triggered. Please wait 10-20s.' });
-          logger.info(`Update Status recovery triggered for ${mint}`);
+          triggerManualRefresh(mint, 'Update Status');
+          socket.emit('refreshPassedTokenInfoStatus', {
+            success: true,
+            message: 'Status recovery triggered. Please wait 10-20s.',
+          });
         } catch (err) {
           logger.error(`Update Status failed for ${mint}: ${err.message}`);
-          socket.emit('refreshPassedTokenInfoStatus', { success: false, message: err.message });
+          socket.emit('refreshPassedTokenInfoStatus', {
+            success: false,
+            message: err.message,
+          });
         }
       });
 

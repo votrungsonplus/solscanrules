@@ -1,0 +1,317 @@
+/* ═══════════════════════════════════════════════════════════
+   SCAN SOL BOT — feed.js
+   Token feed, filter tabs, search bar, placeholder states
+   ═══════════════════════════════════════════════════════════ */
+
+function renderAnalysisPlaceholder(kind, { title, message, mint }) {
+    if (!liveAnalysis) return;
+    const iconMap = {
+        loading: '<i class="fas fa-spinner fa-spin"></i>',
+        error: '<i class="fas fa-exclamation-triangle"></i>',
+        empty: '<i class="fas fa-crosshairs"></i>',
+    };
+    const mintLine = mint
+        ? `<p class="empty-hint" title="${escapeHtml(mint)}">${escapeHtml(mint.slice(0, 8))}…${escapeHtml(mint.slice(-6))}</p>`
+        : '';
+    liveAnalysis.innerHTML = `
+        <div class="empty-state state-${kind}">
+            <div class="empty-icon">${iconMap[kind] || iconMap.empty}</div>
+            ${title ? `<p class="empty-title">${escapeHtml(title)}</p>` : ''}
+            ${message ? `<p>${escapeHtml(message)}</p>` : ''}
+            ${mintLine}
+        </div>
+    `;
+}
+
+function clearSearchTimeout() {
+    if (_searchTimeoutId) {
+        clearTimeout(_searchTimeoutId);
+        _searchTimeoutId = null;
+    }
+}
+
+// ═══════════════════════════════════════
+// TOKEN FEED
+// ═══════════════════════════════════════
+function createFeedItem(token) {
+    const item = document.createElement('div');
+    item.className = 'feed-item';
+    item.dataset.mint = token.mint;
+    item.dataset.status = 'pending';
+    item.dataset.timestamp = token.timestamp || Date.now();
+
+    let statusClass = 'pending';
+    let statusText = 'ĐANG XỬ LÝ';
+    if (token.status === 'ELIGIBLE' || token.status === 'PASS') {
+        statusClass = 'pass';
+        statusText = 'ĐẠT';
+        item.dataset.status = 'pass';
+    } else if (token.status === 'BLOCKED' || token.status === 'FAIL') {
+        statusClass = 'fail';
+        statusText = 'LOẠI';
+        item.dataset.status = 'fail';
+    }
+
+    const symbol = escapeHtml(token.symbol || '???');
+    const tokenName = token.name ? escapeHtml(token.name.slice(0, 20)) : '';
+    const mint = escapeHtml(token.mint || '');
+
+    item.innerHTML = `
+        <div class="feed-item-row">
+            <span class="symbol">${symbol}<span class="name-dim">${tokenName ? ` / ${tokenName}` : ''}</span></span>
+            <div class="status-container">
+                <span class="feed-badge ${statusClass}">${statusText}</span>
+                <span class="block-reason"></span>
+            </div>
+        </div>
+        <div class="meta-row">
+            <span class="mint-short">${shortenMint(mint)}</span>
+            <span class="age-tag" data-ts="${token.timestamp || Date.now()}">${getAge(token.timestamp || Date.now())}</span>
+        </div>
+    `;
+
+    item.addEventListener('click', () => {
+        selectedMint = token.mint;
+        $$('.feed-item').forEach(i => i.classList.remove('active'));
+        item.classList.add('active');
+        socket.emit('getAnalysis', token.mint);
+    });
+
+    return item;
+}
+
+function addTokenToFeed(token) {
+    if (feedItems.has(token.mint)) return;
+
+    const item = createFeedItem(token);
+    feedItems.set(token.mint, item);
+
+    const placeholder = tokenFeed.querySelector('.placeholder-text');
+    if (placeholder) placeholder.remove();
+
+    tokenFeed.prepend(item);
+    feedCount++;
+    feedCounter.textContent = feedCount;
+
+    applyFilter();
+
+    if (feedItems.size > 1000) {
+        const keys = [...feedItems.keys()];
+        const oldest = keys[0];
+        const oldEl = feedItems.get(oldest);
+        if (oldEl) oldEl.remove();
+        feedItems.delete(oldest);
+    }
+}
+
+function updateFeedItemStatus(mint, status, ruleResult = null, retryCount = 0, isFinal = false) {
+    const item = feedItems.get(mint);
+    if (!item) return;
+
+    const badge = item.querySelector('.feed-badge');
+    if (!badge) return;
+
+    item.dataset.status = status === 'ELIGIBLE' ? 'pass' : 'fail';
+
+    if (status === 'ELIGIBLE') {
+        badge.className = 'feed-badge pass';
+        badge.textContent = 'ĐẠT';
+        if (!countedPasses.has(mint)) {
+            countedPasses.add(mint);
+            const current = parseInt(totalPassedEl.textContent) || 0;
+            totalPassedEl.textContent = current + 1;
+        }
+    } else {
+        badge.className = 'feed-badge fail';
+        badge.textContent = 'LOẠI';
+
+        const reasonEl = item.querySelector('.block-reason');
+        if (reasonEl) {
+            let note = '';
+            if (ruleResult?.blockReasons?.length > 0) {
+                note = `Chưa đạt ${ruleResult.blockReasons.length} đ/k`;
+            } else if (ruleResult?.summary && ruleResult.summary.includes('Không đủ')) {
+                note = 'Thiếu ví mua';
+            }
+
+            const currentRetry = retryCount || ruleResult?.retryCount || 0;
+            if (currentRetry > 0) {
+                note += (note ? ' | ' : '') + `Lần ${currentRetry}`;
+            }
+
+            const currentIsFinal = isFinal || ruleResult?.isFinal;
+            if (currentIsFinal) {
+                note += ' ⏹️';
+                item.classList.add('is-final');
+            } else {
+                item.classList.remove('is-final');
+            }
+
+            if (note) {
+                reasonEl.textContent = note;
+                reasonEl.style.display = 'block';
+            } else {
+                reasonEl.textContent = '';
+                reasonEl.style.display = 'none';
+            }
+        }
+    }
+
+    applyFilter();
+}
+
+function applyFilter() {
+    feedItems.forEach((el) => {
+        const status = el.dataset.status;
+        if (currentFilter === 'all') {
+            el.classList.remove('hidden-by-filter');
+        } else if (currentFilter === status) {
+            el.classList.remove('hidden-by-filter');
+        } else {
+            el.classList.add('hidden-by-filter');
+        }
+    });
+}
+
+socket.on('initialFeed', (tokens) => {
+    if (!tokens || tokens.length === 0) return;
+    tokenFeed.innerHTML = '';
+    feedItems.clear();
+    feedCount = 0;
+
+    const sorted = [...tokens].reverse();
+    for (const token of sorted) {
+        addTokenToFeed(token);
+    }
+});
+
+socket.on('newToken', (token) => {
+    addTokenToFeed(token);
+});
+
+socket.on('tokenPriceUpdate', (data) => {
+    const { mint, marketCapSol, marketCapUsd, globalFee } = data;
+    const priceUsd = parseFloat(document.getElementById('solPrice')?.textContent?.replace('$', '') || 150);
+    const currentMcapUsd = marketCapUsd || (marketCapSol * priceUsd);
+
+    if (selectedMint === mint) {
+        const currentMcVal = document.querySelector('.info-grid .val.yellow');
+        if (currentMcVal) currentMcVal.textContent = '$' + formatNumber(currentMcapUsd);
+
+        const feeVal = document.querySelector('.info-grid .val.highlight-val.yellow');
+        if (feeVal) feeVal.textContent = globalFee.toFixed(4) + ' SOL';
+    }
+
+    const rows = document.querySelectorAll(`[data-mint="${mint}"]`);
+    rows.forEach(row => {
+        const launchMcap = parseFloat(row.dataset.launch) || 0;
+        if (launchMcap > 0) {
+            const currentMultiplier = (currentMcapUsd / launchMcap).toFixed(1);
+            const currentPnl = ((currentMcapUsd - launchMcap) / launchMcap * 100).toFixed(0);
+
+            const multSpan = row.querySelector('.multiplier.current');
+            if (multSpan) multSpan.textContent = 'x' + currentMultiplier;
+
+            const currentValSpan = row.querySelector('.mcap-line.current-line .val');
+            if (currentValSpan) {
+                currentValSpan.textContent = `$${formatNumber(currentMcapUsd)} (${currentPnl >= 0 ? '+' : ''}${currentPnl}%)`;
+                currentValSpan.className = `val ${currentPnl >= 0 ? 'up' : 'down'}`;
+            }
+
+            const highlightPnl = row.querySelector('.highlight-pnl.current');
+            if (highlightPnl) {
+                highlightPnl.textContent = `Hiện: ${currentPnl >= 0 ? '+' : ''}${currentPnl}%`;
+                highlightPnl.className = `highlight-pnl current ${currentPnl >= 0 ? 'up' : 'down'}`;
+            }
+        }
+    });
+});
+
+// ═══════════════════════════════════════
+// FEED FILTER
+// ═══════════════════════════════════════
+$$('.feed-tabs .tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+        $$('.feed-tabs .tab').forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        currentFilter = tab.dataset.filter;
+        applyFilter();
+    });
+});
+
+// ═══════════════════════════════════════
+// SEARCH
+// ═══════════════════════════════════════
+function handleSearch() {
+    const mint = contractSearch.value.trim();
+    if (!mint) return;
+
+    if (!MINT_REGEX.test(mint)) {
+        renderAnalysisPlaceholder('error', {
+            title: 'Địa chỉ không hợp lệ',
+            message: 'Mint phải là chuỗi base58 dài 32–44 ký tự.',
+            mint,
+        });
+        return;
+    }
+
+    selectedMint = mint;
+    _searchActiveMint = mint;
+    renderAnalysisPlaceholder('loading', {
+        title: 'Đang phân tích token',
+        message: 'Đang tra cứu dữ liệu on-chain + DexScreener…',
+        mint,
+    });
+    socket.emit('getAnalysis', mint);
+
+    clearSearchTimeout();
+    _searchTimeoutId = setTimeout(() => {
+        if (_searchActiveMint === mint) {
+            renderAnalysisPlaceholder('error', {
+                title: 'Không có phản hồi',
+                message: 'Máy chủ không trả dữ liệu sau 20 giây. Thử lại hoặc kiểm tra token trên DexScreener.',
+                mint,
+            });
+            _searchActiveMint = null;
+        }
+    }, SEARCH_TIMEOUT_MS);
+}
+
+function requestPassedTokenInfo(tokenOrMint) {
+    const mint = typeof tokenOrMint === 'string' ? tokenOrMint : tokenOrMint?.mint;
+    if (!mint) return;
+
+    selectedMint = mint;
+
+    if (typeof tokenOrMint === 'object') {
+        const launchMcapUsd = tokenOrMint.launch_mcap_usd || 0;
+        const highestMcapUsd = tokenOrMint.highest_mcap_usd || launchMcapUsd;
+
+        renderAnalysis({
+            infoOnly: true,
+            tokenData: {
+                mint,
+                name: tokenOrMint.name || 'Khong ro',
+                symbol: tokenOrMint.symbol || '???',
+                timestamp: tokenOrMint.timestamp || Date.now(),
+                launchMcapUsd,
+                highestMcapUsd,
+                highestMcapTimestamp: tokenOrMint.highest_mcap_timestamp || null,
+                marketCapUsd: highestMcapUsd,
+                circulatingMcapUsd: highestMcapUsd,
+            },
+            ruleResult: {
+                shouldBuy: true,
+                summary: 'Thông tin token đã qua lọc',
+                results: []
+            }
+        });
+    }
+
+    socket.emit('getAnalysis', { mint, mode: 'passed-info' });
+}
+
+searchBtn?.addEventListener('click', handleSearch);
+contractSearch?.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') handleSearch();
+});

@@ -508,6 +508,20 @@ body {
     gap: 12px;
 }
 
+.detail-footer {
+    font-size: 10px;
+    color: var(--text-muted);
+    text-align: right;
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
 /* Token Detail Card */
 .detail-card {
     animation: fadeSlideUp 0.3s ease;
@@ -1532,8 +1546,11 @@ input:checked + .slider::before { transform: translateX(18px); }
 ::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.2); }
 
 /* ═══════════════════════════════════════
-   RESPONSIVE (tablet-ish)
+   RESPONSIVE — desktop → mobile
+   Breakpoints: 1400 / 1200 / 1024 / 768 / 480
    ═══════════════════════════════════════ */
+
+/* Large desktop — slim sidebars */
 @media (max-width: 1400px) {
     .grid-layout {
         grid-template-columns: 300px 1fr 340px;
@@ -1543,6 +1560,7 @@ input:checked + .slider::before { transform: translateX(18px); }
     }
 }
 
+/* Small desktop — tighter sidebars, 2-col market data */
 @media (max-width: 1200px) {
     .grid-layout {
         grid-template-columns: 260px 1fr 320px;
@@ -1550,13 +1568,39 @@ input:checked + .slider::before { transform: translateX(18px); }
     .market-data {
         grid-template-columns: repeat(2, 1fr);
     }
+    .info-grid {
+        grid-template-columns: 1fr;
+    }
 }
 
-@media (max-width: 900px) {
+/* Tablet — feed becomes top row, controls bottom row, analysis middle */
+@media (max-width: 1024px) {
+    body, .app-container {
+        height: auto;
+        min-height: 100vh;
+        overflow-y: auto;
+    }
+    .grid-layout {
+        grid-template-columns: 1fr;
+        grid-template-rows: minmax(280px, 35vh) minmax(420px, auto) minmax(360px, 40vh);
+        flex: none;
+        overflow: visible;
+    }
+    .panel {
+        overflow: hidden;
+    }
+}
+
+/* Tablet → mobile — top bar wraps, market data 2-col, hide non-critical chips */
+@media (max-width: 768px) {
     .top-bar {
         flex-wrap: wrap;
         height: auto;
-        padding: 10px 16px;
+        padding: 10px 12px;
+        gap: 10px;
+    }
+    .top-bar .brand {
+        flex: 1 1 auto;
     }
     .auto-reload-control {
         order: 3;
@@ -1564,11 +1608,95 @@ input:checked + .slider::before { transform: translateX(18px); }
         justify-content: center;
         margin-left: 0;
     }
-    .grid-layout {
-        grid-template-columns: 1fr;
-        grid-template-rows: 250px 1fr 300px;
+    .top-stats {
+        flex-wrap: wrap;
+        gap: 6px;
+        order: 4;
+        width: 100%;
+        justify-content: space-between;
     }
+    .stat-chip {
+        font-size: 10px;
+        padding: 4px 8px;
+        flex: 1 1 calc(33% - 4px);
+        min-width: 0;
+    }
+    .stat-chip.uptime { display: none; }
+    .grid-layout {
+        grid-template-rows: minmax(240px, 32vh) minmax(380px, auto) minmax(320px, 36vh);
+        gap: 8px;
+        background: transparent;
+    }
+    .market-data {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    .detail-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+    }
+    .detail-links {
+        flex-wrap: wrap;
+    }
+    .search-bar {
+        flex-wrap: wrap;
+    }
+    .search-bar input {
+        flex: 1 1 100%;
+        min-width: 0;
+    }
+    .search-bar button {
+        flex: 1 1 auto;
+    }
+    .ctrl-tabs {
+        flex-wrap: wrap;
+    }
+    .ctrl-tab {
+        flex: 1 1 calc(50% - 4px);
+        text-align: center;
+    }
+    .profile-card-head {
+        flex-direction: column;
+    }
+    .profile-hint {
+        max-width: none;
+        text-align: left;
+    }
+}
+
+/* Mobile portrait — single column, larger tap targets, hide top stat chips */
+@media (max-width: 480px) {
     .top-stats { display: none; }
+    .top-bar {
+        padding: 8px 10px;
+    }
+    .top-bar .brand h1 {
+        font-size: 14px;
+    }
+    .grid-layout {
+        grid-template-rows: minmax(200px, 28vh) auto auto;
+    }
+    .market-data {
+        grid-template-columns: 1fr;
+    }
+    .info-grid {
+        grid-template-columns: 1fr;
+    }
+    .panel-header {
+        padding: 10px 12px;
+    }
+    .panel-header h2 {
+        font-size: 11px;
+    }
+    .feed-item {
+        padding: 8px 10px;
+    }
+    .buyers-table {
+        font-size: 10px;
+    }
+    .buyers-table th, .buyers-table td {
+        padding: 4px 3px;
+    }
 }
 
 /* ── Sync Controls ── */
