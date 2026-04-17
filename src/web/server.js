@@ -450,6 +450,16 @@ class WebServer {
         const mode = typeof request === 'object' ? request?.mode : null;
         if (!mint) return;
 
+        // Validate mint format — Solana addresses are base58, 32–44 chars
+        const isValidMint = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(mint);
+        if (!isValidMint) {
+          socket.emit('analysisError', {
+            mint,
+            message: 'Địa chỉ mint không hợp lệ. Phải là chuỗi base58 32–44 ký tự.',
+          });
+          return;
+        }
+
         if (mode === 'passed-info') {
           const emitted = await emitPassedTokenInfo(mint);
           if (emitted) {
@@ -470,44 +480,62 @@ class WebServer {
           const analysis = buildAnalysisFromScan(scan);
           if (analysis) {
             socket.emit('analysisResult', analysis);
+            return;
+          }
+          logger.error(`Error rebuilding historical analysis for ${mint}`);
+        }
+
+        const detected = tracker.getDetectedTokenByMint(mint);
+        if (detected) {
+          const orchestrator = require('../core/orchestrator');
+          const isProcessing = orchestrator.processingTokens?.has(mint);
+          const buyers = orchestrator.tokenEarlyBuyers?.get(mint);
+          const buyerCount = buyers ? buyers.length : 0;
+          const required = settings.monitoring.earlyBuyersToMonitor;
+
+          let summary;
+          if (isProcessing) {
+            summary = `⏳ Đang phân tích... (${buyerCount}/${required} buyers)`;
+          } else if (buyerCount > 0) {
+            summary = `🔄 Chờ phân tích tiếp (${buyerCount}/${required} buyers)`;
           } else {
-            logger.error(`Error rebuilding historical analysis for ${mint}`);
+            const ageMs = Date.now() - detected.timestamp;
+            const ageMin = (ageMs / 60000).toFixed(1);
+            summary = `⏳ Đang chờ giao dịch đầu tiên (${ageMin}m)`;
           }
-        } else {
-          const detected = tracker.getDetectedTokenByMint(mint);
-          if (detected) {
-            // Check if token is currently being analyzed or waiting for buyers
-            const orchestrator = require('../core/orchestrator');
-            const isProcessing = orchestrator.processingTokens?.has(mint);
-            const buyers = orchestrator.tokenEarlyBuyers?.get(mint);
-            const buyerCount = buyers ? buyers.length : 0;
-            const required = settings.monitoring.earlyBuyersToMonitor;
 
-            let summary;
-            if (isProcessing) {
-              summary = `⏳ Đang phân tích... (${buyerCount}/${required} buyers)`;
-            } else if (buyerCount > 0) {
-              summary = `🔄 Chờ phân tích tiếp (${buyerCount}/${required} buyers)`;
-            } else {
-              const ageMs = Date.now() - detected.timestamp;
-              const ageMin = (ageMs / 60000).toFixed(1);
-              summary = `⏳ Đang chờ giao dịch đầu tiên (${ageMin}m)`;
+          socket.emit('analysisResult', {
+            tokenData: {
+              mint: detected.mint,
+              name: detected.name,
+              symbol: detected.symbol,
+              timestamp: detected.timestamp
+            },
+            ruleResult: {
+              shouldBuy: false,
+              summary,
+              results: []
             }
+          });
+          return;
+        }
 
-            socket.emit('analysisResult', {
-              tokenData: {
-                mint: detected.mint,
-                name: detected.name,
-                symbol: detected.symbol,
-                timestamp: detected.timestamp
-              },
-              ruleResult: {
-                shouldBuy: false,
-                summary,
-                results: []
-              }
-            });
-          }
+        // Not in cache, not in DB → trigger live on-chain + DexScreener lookup.
+        // manualTokenRefresh will emit 'analysisResult' via webServer.emit when done.
+        socket.emit('analysisLoading', {
+          mint,
+          message: 'Đang tra cứu on-chain + DexScreener...',
+        });
+        logger.info(`Web action: live lookup for unknown mint ${mint}`);
+        try {
+          const orchestrator = require('../core/orchestrator');
+          await orchestrator.manualTokenRefresh(mint);
+        } catch (err) {
+          logger.error(`Live lookup failed for ${mint}: ${err.message}`);
+          socket.emit('analysisError', {
+            mint,
+            message: `Không tìm được dữ liệu on-chain cho token: ${err.message}`,
+          });
         }
       });
 

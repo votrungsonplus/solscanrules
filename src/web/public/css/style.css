@@ -473,6 +473,41 @@ body {
     font-size: 13px;
 }
 
+.empty-state .empty-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0;
+}
+
+.empty-state .empty-hint {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    opacity: 0.6;
+    margin-top: 4px;
+}
+
+.empty-state.state-loading .empty-icon {
+    color: var(--blue);
+    opacity: 0.9;
+}
+
+.empty-state.state-error .empty-icon {
+    color: var(--red);
+    opacity: 0.9;
+}
+
+.empty-state.state-error .empty-title {
+    color: var(--red);
+}
+
+.positions-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+}
+
 /* Token Detail Card */
 .detail-card {
     animation: fadeSlideUp 0.3s ease;

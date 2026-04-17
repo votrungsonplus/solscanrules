@@ -666,12 +666,71 @@ function applyFilter() {
 // ═══════════════════════════════════════
 // SEARCH
 // ═══════════════════════════════════════
+const MINT_REGEX = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
+const SEARCH_TIMEOUT_MS = 20000;
+let _searchTimeoutId = null;
+let _searchActiveMint = null;
+
+function renderAnalysisPlaceholder(kind, { title, message, mint }) {
+    if (!liveAnalysis) return;
+    const iconMap = {
+        loading: '<i class="fas fa-spinner fa-spin"></i>',
+        error: '<i class="fas fa-exclamation-triangle"></i>',
+        empty: '<i class="fas fa-crosshairs"></i>',
+    };
+    const mintLine = mint
+        ? `<p class="empty-hint" title="${escapeHtml(mint)}">${escapeHtml(mint.slice(0, 8))}…${escapeHtml(mint.slice(-6))}</p>`
+        : '';
+    liveAnalysis.innerHTML = `
+        <div class="empty-state state-${kind}">
+            <div class="empty-icon">${iconMap[kind] || iconMap.empty}</div>
+            ${title ? `<p class="empty-title">${escapeHtml(title)}</p>` : ''}
+            ${message ? `<p>${escapeHtml(message)}</p>` : ''}
+            ${mintLine}
+        </div>
+    `;
+}
+
+function clearSearchTimeout() {
+    if (_searchTimeoutId) {
+        clearTimeout(_searchTimeoutId);
+        _searchTimeoutId = null;
+    }
+}
+
 function handleSearch() {
     const mint = contractSearch.value.trim();
-    if (mint) {
-        selectedMint = mint;
-        socket.emit('getAnalysis', mint);
+    if (!mint) return;
+
+    if (!MINT_REGEX.test(mint)) {
+        renderAnalysisPlaceholder('error', {
+            title: 'Địa chỉ không hợp lệ',
+            message: 'Mint phải là chuỗi base58 dài 32–44 ký tự.',
+            mint,
+        });
+        return;
     }
+
+    selectedMint = mint;
+    _searchActiveMint = mint;
+    renderAnalysisPlaceholder('loading', {
+        title: 'Đang phân tích token',
+        message: 'Đang tra cứu dữ liệu on-chain + DexScreener…',
+        mint,
+    });
+    socket.emit('getAnalysis', mint);
+
+    clearSearchTimeout();
+    _searchTimeoutId = setTimeout(() => {
+        if (_searchActiveMint === mint) {
+            renderAnalysisPlaceholder('error', {
+                title: 'Không có phản hồi',
+                message: 'Máy chủ không trả dữ liệu sau 20 giây. Thử lại hoặc kiểm tra token trên DexScreener.',
+                mint,
+            });
+            _searchActiveMint = null;
+        }
+    }, SEARCH_TIMEOUT_MS);
 }
 
 function requestPassedTokenInfo(tokenOrMint) {
@@ -804,8 +863,33 @@ socket.on('refreshPassedTokenInfoStatus', (data) => {
 // ANALYSIS DETAIL
 // ═══════════════════════════════════════
 
+socket.on('analysisLoading', (data) => {
+    if (!data?.mint || data.mint !== _searchActiveMint) return;
+    renderAnalysisPlaceholder('loading', {
+        title: 'Đang phân tích token',
+        message: data.message || 'Đang tra cứu dữ liệu on-chain…',
+        mint: data.mint,
+    });
+});
+
+socket.on('analysisError', (data) => {
+    if (!data?.mint || data.mint !== _searchActiveMint) return;
+    clearSearchTimeout();
+    _searchActiveMint = null;
+    renderAnalysisPlaceholder('error', {
+        title: 'Không tìm thấy token',
+        message: data.message || 'Không có dữ liệu phản hồi.',
+        mint: data.mint,
+    });
+});
+
 socket.on('analysisResult', (data) => {
     const { tokenData, ruleResult, devAnalysis, tokenScore, holderStats, clusterAnalysis, earlyBuyers, earlyBuyerTrades, globalFee } = data;
+
+    if (tokenData?.mint && tokenData.mint === _searchActiveMint) {
+        clearSearchTimeout();
+        _searchActiveMint = null;
+    }
 
     // Update feed item status
     if (tokenData?.mint && ruleResult) {
