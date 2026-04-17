@@ -67,7 +67,7 @@ class WebServer {
         clusterAnalysis: safeParseJson(scan.cluster_analysis_json, null),
         earlyBuyers: safeParseJson(scan.early_buyers_json, null),
         earlyBuyerTrades: safeParseJson(scan.early_buyer_trades_json, null),
-        retryCount: tracker.getScanCount(scan.mint),
+        retryCount: scan.scan_index || tracker.getScanCount(scan.mint),
         isFinal: scan.is_final === 1,
         ...overrides.root,
       };
@@ -450,6 +450,16 @@ class WebServer {
         const mode = typeof request === 'object' ? request?.mode : null;
         if (!mint) return;
 
+        // Validate mint format — Solana addresses are base58, 32–44 chars
+        const isValidMint = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(mint);
+        if (!isValidMint) {
+          socket.emit('analysisError', {
+            mint,
+            message: 'Địa chỉ mint không hợp lệ. Phải là chuỗi base58 32–44 ký tự.',
+          });
+          return;
+        }
+
         if (mode === 'passed-info') {
           const emitted = await emitPassedTokenInfo(mint);
           if (emitted) {
@@ -470,69 +480,100 @@ class WebServer {
           const analysis = buildAnalysisFromScan(scan);
           if (analysis) {
             socket.emit('analysisResult', analysis);
+            return;
+          }
+          logger.error(`Error rebuilding historical analysis for ${mint}`);
+        }
+
+        const detected = tracker.getDetectedTokenByMint(mint);
+        if (detected) {
+          const orchestrator = require('../core/orchestrator');
+          const isProcessing = orchestrator.processingTokens?.has(mint);
+          const buyers = orchestrator.tokenEarlyBuyers?.get(mint);
+          const buyerCount = buyers ? buyers.length : 0;
+          const required = settings.monitoring.earlyBuyersToMonitor;
+
+          let summary;
+          if (isProcessing) {
+            summary = `⏳ Đang phân tích... (${buyerCount}/${required} buyers)`;
+          } else if (buyerCount > 0) {
+            summary = `🔄 Chờ phân tích tiếp (${buyerCount}/${required} buyers)`;
           } else {
-            logger.error(`Error rebuilding historical analysis for ${mint}`);
+            const ageMs = Date.now() - detected.timestamp;
+            const ageMin = (ageMs / 60000).toFixed(1);
+            summary = `⏳ Đang chờ giao dịch đầu tiên (${ageMin}m)`;
           }
-        } else {
-          const detected = tracker.getDetectedTokenByMint(mint);
-          if (detected) {
-            // Check if token is currently being analyzed or waiting for buyers
-            const orchestrator = require('../core/orchestrator');
-            const isProcessing = orchestrator.processingTokens?.has(mint);
-            const buyers = orchestrator.tokenEarlyBuyers?.get(mint);
-            const buyerCount = buyers ? buyers.length : 0;
-            const required = settings.monitoring.earlyBuyersToMonitor;
 
-            let summary;
-            if (isProcessing) {
-              summary = `⏳ Đang phân tích... (${buyerCount}/${required} buyers)`;
-            } else if (buyerCount > 0) {
-              summary = `🔄 Chờ phân tích tiếp (${buyerCount}/${required} buyers)`;
-            } else {
-              const ageMs = Date.now() - detected.timestamp;
-              const ageMin = (ageMs / 60000).toFixed(1);
-              summary = `⏳ Đang chờ giao dịch đầu tiên (${ageMin}m)`;
+          socket.emit('analysisResult', {
+            tokenData: {
+              mint: detected.mint,
+              name: detected.name,
+              symbol: detected.symbol,
+              timestamp: detected.timestamp
+            },
+            ruleResult: {
+              shouldBuy: false,
+              summary,
+              results: []
             }
+          });
+          return;
+        }
 
-            socket.emit('analysisResult', {
-              tokenData: {
-                mint: detected.mint,
-                name: detected.name,
-                symbol: detected.symbol,
-                timestamp: detected.timestamp
-              },
-              ruleResult: {
-                shouldBuy: false,
-                summary,
-                results: []
-              }
-            });
-          }
+        // Not in cache, not in DB → trigger live on-chain + DexScreener lookup.
+        // manualTokenRefresh will emit 'analysisResult' via webServer.emit when done.
+        socket.emit('analysisLoading', {
+          mint,
+          message: 'Đang tra cứu on-chain + DexScreener...',
+        });
+        logger.info(`Web action: live lookup for unknown mint ${mint}`);
+        try {
+          const orchestrator = require('../core/orchestrator');
+          await orchestrator.manualTokenRefresh(mint);
+        } catch (err) {
+          logger.error(`Live lookup failed for ${mint}: ${err.message}`);
+          socket.emit('analysisError', {
+            mint,
+            message: `Không tìm được dữ liệu on-chain cho token: ${err.message}`,
+          });
         }
       });
 
-      // Manual refresh
-      socket.on('manualRefresh', (mint) => {
+      // ── Manual refresh helpers ──
+      // Both `manualRefresh` and `refreshPassedTokenInfo` trigger the same
+      // pipeline (orchestrator.manualTokenRefresh) which fetches market data,
+      // recovers deployer on-chain, recovers historical buyers, and runs full
+      // analysis (emits `analysisResult` when done). The only difference is
+      // that `refreshPassedTokenInfo` ALSO emits a `refreshPassedTokenInfoStatus`
+      // ack so the "Update Status" button in the passed-info card can stop
+      // spinning even before the full analysis arrives.
+      const triggerManualRefresh = (mint, label) => {
+        logger.info(`Web action: ${label} for ${mint}`);
         const orchestrator = require('../core/orchestrator');
-        orchestrator.manualTokenRefresh(mint);
-        logger.info(`Web action: Manual refresh requested for ${mint}`);
+        return orchestrator.manualTokenRefresh(mint);
+      };
+
+      socket.on('manualRefresh', (mint) => {
+        try {
+          triggerManualRefresh(mint, 'Manual refresh');
+        } catch (err) {
+          logger.error(`Manual refresh failed for ${mint}: ${err.message}`);
+        }
       });
 
       socket.on('refreshPassedTokenInfo', async (mint) => {
-        logger.info(`Web action: Update Status requested for ${mint}`);
         try {
-          const orchestrator = require('../core/orchestrator');
-          
-          // Trigger the robust revival pipeline
-          // This will fetch market data, recover deployer on-chain, 
-          // recover buyers on-chain, and run full analysis.
-          orchestrator.manualTokenRefresh(mint);
-
-          socket.emit('refreshPassedTokenInfoStatus', { success: true, message: 'Status recovery triggered. Please wait 10-20s.' });
-          logger.info(`Update Status recovery triggered for ${mint}`);
+          triggerManualRefresh(mint, 'Update Status');
+          socket.emit('refreshPassedTokenInfoStatus', {
+            success: true,
+            message: 'Status recovery triggered. Please wait 10-20s.',
+          });
         } catch (err) {
           logger.error(`Update Status failed for ${mint}: ${err.message}`);
-          socket.emit('refreshPassedTokenInfoStatus', { success: false, message: err.message });
+          socket.emit('refreshPassedTokenInfoStatus', {
+            success: false,
+            message: err.message,
+          });
         }
       });
 

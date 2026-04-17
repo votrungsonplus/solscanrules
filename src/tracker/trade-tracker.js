@@ -92,6 +92,27 @@ class TradeTracker {
         this.db.exec(`ALTER TABLE token_scans ADD COLUMN is_final INTEGER DEFAULT 0;`);
         logger.info(`Migration: Added is_final to token_scans`);
       }
+
+      if (!scanTableInfo.some(col => col.name === 'scan_index')) {
+        this.db.exec(`ALTER TABLE token_scans ADD COLUMN scan_index INTEGER DEFAULT 0;`);
+        logger.info(`Migration: Added scan_index to token_scans`);
+        // Backfill existing rows: ROW_NUMBER() per mint ordered by timestamp
+        try {
+          const backfill = this.db.prepare(`
+            WITH ranked AS (
+              SELECT id, ROW_NUMBER() OVER (PARTITION BY mint ORDER BY timestamp ASC, id ASC) AS idx
+              FROM token_scans
+            )
+            UPDATE token_scans
+            SET scan_index = (SELECT idx FROM ranked WHERE ranked.id = token_scans.id)
+            WHERE scan_index = 0
+          `);
+          backfill.run();
+          logger.info(`Migration: Backfilled scan_index for existing rows`);
+        } catch (backfillErr) {
+          logger.warn(`scan_index backfill skipped (SQLite <3.25 window fn unavailable?): ${backfillErr.message}`);
+        }
+      }
     } catch (err) {
       logger.error(`Scan migration failed: ${err.message}`);
     }
@@ -259,6 +280,7 @@ class TradeTracker {
   recordScan(data) {
     if (!this.db) return;
     try {
+      const scanIndex = this.getScanCount(data.mint) + 1;
       const stmt = this.db.prepare(`
         INSERT INTO token_scans (
           mint,
@@ -277,9 +299,10 @@ class TradeTracker {
           early_buyer_trades_json,
           action_taken,
           is_final,
+          scan_index,
           timestamp
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
 
       stmt.run(
@@ -299,6 +322,7 @@ class TradeTracker {
         data.earlyBuyerTrades ? JSON.stringify(data.earlyBuyerTrades) : null,
         data.actionTaken || null,
         data.isFinal ? 1 : 0,
+        scanIndex,
         data.timestamp || Date.now()
       );
 

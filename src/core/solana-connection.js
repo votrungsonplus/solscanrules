@@ -106,6 +106,20 @@ class SolanaConnection {
       this._categoryIndices[RPC_CATEGORY.ANALYSIS] = [1];
       this._categoryIndices[RPC_CATEGORY.METADATA] = [1];
       this._categoryIndices[RPC_CATEGORY.GENERAL] = [0, 1];
+    } else if (count >= 12) {
+      // 12+ RPCs (mega-pool): dedicated clusters per function
+      //   [0,1]   DETECTION — fastest new-token pickup
+      //   [2,3]   TRADING   — buy/sell exec
+      //   [4,5,6] METADATA  — holders/supply
+      //   [7..]   ANALYSIS  — all remaining endpoints for wallet scanning
+      //   all     GENERAL   — fallback pool
+      const allIndices = Array.from({ length: count }, (_, i) => i);
+      this._categoryIndices[RPC_CATEGORY.DETECTION] = [0, 1];
+      this._categoryIndices[RPC_CATEGORY.TRADING] = [2, 3];
+      this._categoryIndices[RPC_CATEGORY.METADATA] = [4, 5, 6];
+      this._categoryIndices[RPC_CATEGORY.ANALYSIS] = allIndices.slice(7);
+      this._categoryIndices[RPC_CATEGORY.GENERAL] = allIndices;
+      logger.info(`📡 MEGA-POOL (${count} RPCs): ANALYSIS has ${this._categoryIndices[RPC_CATEGORY.ANALYSIS].length} dedicated endpoints, METADATA has 3, DETECTION+TRADING each has 2`);
     } else if (count >= 5) {
       // 5+ RPCs: Extra endpoints dedicated to wallet analysis
       this._categoryIndices[RPC_CATEGORY.DETECTION] = [0];
@@ -314,6 +328,17 @@ class SolanaConnection {
   getWallet() { return this.wallet; }
   getPublicKey() { return this.wallet?.publicKey; }
   getExecutionConnection() { return this.executionConnection || this.connections[0]; }
+
+  getStats() {
+    const now = Date.now();
+    return this._endpointStats.map((s, i) => ({
+      idx: i,
+      inFlight: s.inFlight,
+      errorCount: s.errorCount,
+      cooldownMs: Math.max(0, s.cooldownUntil - now),
+      msSinceLastReq: now - s.lastRequestTime,
+    }));
+  }
 
   /**
    * Get wallet summary (address, balance)

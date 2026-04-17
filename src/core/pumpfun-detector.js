@@ -2,102 +2,116 @@ const WebSocket = require('ws');
 const EventEmitter = require('events');
 const settings = require('../config/settings');
 const logger = require('../utils/logger');
-const { SolanaConnection: solana } = require('./solana-connection');
 
 class PumpFunDetector extends EventEmitter {
   constructor() {
     super();
-    this.ws = null;
-    this.reconnectAttempts = 0;
-    this.maxReconnectAttempts = 10;
+    this.streams = [];
     this.isRunning = false;
+    this._subscribedTokens = new Set();
+    this._seenCreates = new Map();
+    this._seenTrades = new Map();
+    this._dedupeTTL = 5 * 60 * 1000;
+    this._dedupeCleanupTimer = null;
   }
 
-  /**
-   * Start listening for new token creation events on PumpFun
-   * Uses PumpPortal WebSocket API for real-time detection
-   */
   start() {
     this.isRunning = true;
-    this._connect();
-    logger.info('PumpFun detector started - listening for new tokens...');
+
+    const primaryUrl = settings.pumpfun.wsUrl;
+    this._openStream('primary', primaryUrl);
+
+    if (settings.pumpfun.wsUrl) {
+      this._openStream('shadow', primaryUrl);
+    }
+
+    this._startDedupeCleanup();
+    logger.info(`PumpFun detector started (${this.streams.length} parallel WS streams with dedupe)`);
   }
 
   stop() {
     this.isRunning = false;
-    if (this.ws) {
-      this.ws.close();
-      this.ws = null;
+    for (const stream of this.streams) {
+      try { stream.ws && stream.ws.close(); } catch (e) { /* ignore */ }
     }
+    this.streams = [];
+    if (this._dedupeCleanupTimer) clearInterval(this._dedupeCleanupTimer);
+    this._dedupeCleanupTimer = null;
     logger.info('PumpFun detector stopped');
   }
 
-  _connect() {
-    this.ws = new WebSocket(settings.pumpfun.wsUrl);
+  _openStream(name, url) {
+    const stream = {
+      name,
+      url,
+      ws: null,
+      reconnectAttempts: 0,
+      maxReconnectAttempts: 10,
+    };
+    this.streams.push(stream);
+    this._connectStream(stream);
+  }
 
-    this.ws.on('open', () => {
-      logger.info('Connected to PumpFun WebSocket');
-      this.reconnectAttempts = 0;
+  _connectStream(stream) {
+    stream.ws = new WebSocket(stream.url);
 
-      // Subscribe to new token creation events
-      this.ws.send(JSON.stringify({
-        method: 'subscribeNewToken',
-      }));
+    stream.ws.on('open', () => {
+      logger.info(`Connected to PumpFun WebSocket [${stream.name}]`);
+      stream.reconnectAttempts = 0;
 
-      // Re-subscribe to tokens we were tracking before reconnect
-      if (this._subscribedTokens && this._subscribedTokens.size > 0) {
+      stream.ws.send(JSON.stringify({ method: 'subscribeNewToken' }));
+
+      if (this._subscribedTokens.size > 0) {
         const keys = Array.from(this._subscribedTokens);
-        logger.info(`Re-subscribing to ${keys.length} tokens after reconnect`);
-        this.ws.send(JSON.stringify({
-          method: 'subscribeTokenTrade',
-          keys,
-        }));
+        logger.info(`[${stream.name}] Re-subscribing to ${keys.length} tokens`);
+        stream.ws.send(JSON.stringify({ method: 'subscribeTokenTrade', keys }));
       }
     });
 
-    this.ws.on('message', (data) => {
+    stream.ws.on('message', (data) => {
       try {
         const message = JSON.parse(data.toString());
-        this._handleMessage(message);
+        this._handleMessage(message, stream.name);
       } catch (err) {
-        logger.error(`Failed to parse PumpFun message: ${err.message}`);
+        logger.error(`[${stream.name}] Failed to parse PumpFun message: ${err.message}`);
       }
     });
 
-    this.ws.on('close', () => {
-      logger.warn('PumpFun WebSocket closed');
-      this._reconnect();
+    stream.ws.on('close', () => {
+      logger.warn(`[${stream.name}] PumpFun WebSocket closed`);
+      this._reconnectStream(stream);
     });
 
-    this.ws.on('error', (err) => {
-      logger.error(`PumpFun WebSocket error: ${err.message}`);
+    stream.ws.on('error', (err) => {
+      logger.error(`[${stream.name}] PumpFun WebSocket error: ${err.message}`);
     });
   }
 
-  _reconnect() {
+  _reconnectStream(stream) {
     if (!this.isRunning) return;
-    if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-      logger.error('Max reconnect attempts reached for PumpFun WebSocket. Auto-recovery in 60s...');
-      this.emit('disconnected');
-      // Auto-recovery: reset counter and retry after 60s cooldown
+    if (stream.reconnectAttempts >= stream.maxReconnectAttempts) {
+      logger.error(`[${stream.name}] Max reconnect attempts reached. Auto-recovery in 60s...`);
+      if (stream.name === 'primary') this.emit('disconnected');
       setTimeout(() => {
         if (!this.isRunning) return;
-        logger.info('🔄 Auto-recovery: Attempting to reconnect PumpFun WebSocket...');
-        this.reconnectAttempts = 0;
-        this._connect();
+        logger.info(`🔄 [${stream.name}] Auto-recovery: reconnecting...`);
+        stream.reconnectAttempts = 0;
+        this._connectStream(stream);
       }, 60000);
       return;
     }
-
-    this.reconnectAttempts++;
-    const delay = Math.min(1000 * Math.pow(2, this.reconnectAttempts), 30000);
-    logger.info(`Reconnecting to PumpFun in ${delay}ms (attempt ${this.reconnectAttempts})`);
-    setTimeout(() => this._connect(), delay);
+    stream.reconnectAttempts++;
+    const delay = Math.min(1000 * Math.pow(2, stream.reconnectAttempts), 30000);
+    logger.info(`[${stream.name}] Reconnecting in ${delay}ms (attempt ${stream.reconnectAttempts})`);
+    setTimeout(() => this._connectStream(stream), delay);
   }
 
-  _handleMessage(message) {
-    // New token created on PumpFun
+  _handleMessage(message, streamName) {
     if (message.txType === 'create') {
+      const dedupeKey = message.signature || `${message.mint}-${message.traderPublicKey}`;
+      if (this._seenCreates.has(dedupeKey)) return;
+      this._seenCreates.set(dedupeKey, Date.now());
+
       const { calculatePumpFunMcap } = require('../utils/helpers');
       const marketCapSol = calculatePumpFunMcap(message.vSolInBondingCurve, message.vTokensInBondingCurve) || message.marketCapSol || 0;
 
@@ -117,12 +131,16 @@ class PumpFunDetector extends EventEmitter {
         vSolInBondingCurve: message.vSolInBondingCurve || 0,
       };
 
-      logger.info(`🆕 New token: ${tokenData.symbol} (${tokenData.mint}) | Calculated MCap: ${marketCapSol.toFixed(2)} SOL`);
+      logger.info(`🆕 [${streamName}] New token: ${tokenData.symbol} (${tokenData.mint}) | MCap: ${marketCapSol.toFixed(2)} SOL`);
       this.emit('newToken', tokenData);
+      return;
     }
 
-    // Trade event on bonding curve
     if (message.txType === 'buy' || message.txType === 'sell') {
+      const dedupeKey = message.signature || `${message.mint}-${message.traderPublicKey}-${message.timestamp || ''}`;
+      if (this._seenTrades.has(dedupeKey)) return;
+      this._seenTrades.set(dedupeKey, Date.now());
+
       const { calculatePumpFunMcap } = require('../utils/helpers');
       const marketCapSol = calculatePumpFunMcap(message.vSolInBondingCurve, message.vTokensInBondingCurve) || message.marketCapSol || 0;
 
@@ -140,62 +158,60 @@ class PumpFunDetector extends EventEmitter {
         signature: message.signature,
         slot: message.slot || null,
       };
-
       this.emit('trade', tradeData);
     }
   }
 
-  /**
-   * Subscribe to trades for a specific token mint
-   */
+  _startDedupeCleanup() {
+    if (this._dedupeCleanupTimer) return;
+    this._dedupeCleanupTimer = setInterval(() => {
+      const cutoff = Date.now() - this._dedupeTTL;
+      for (const [k, t] of this._seenCreates) if (t < cutoff) this._seenCreates.delete(k);
+      for (const [k, t] of this._seenTrades) if (t < cutoff) this._seenTrades.delete(k);
+    }, 60000);
+  }
+
   subscribeToToken(mint) {
-    if (!this._subscribedTokens) this._subscribedTokens = new Set();
     this._subscribedTokens.add(mint);
-
-    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-      this.ws.send(JSON.stringify({
-        method: 'subscribeTokenTrade',
-        keys: [mint],
-      }));
-      logger.debug(`Subscribed to trades for ${mint}`);
+    for (const stream of this.streams) {
+      if (stream.ws && stream.ws.readyState === WebSocket.OPEN) {
+        stream.ws.send(JSON.stringify({ method: 'subscribeTokenTrade', keys: [mint] }));
+      }
     }
+    logger.debug(`Subscribed ${this.streams.length} stream(s) to trades for ${mint}`);
   }
 
-  /**
-   * Unsubscribe from a specific token
-   */
   unsubscribeFromToken(mint) {
-    if (this._subscribedTokens) this._subscribedTokens.delete(mint);
-
-    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-      this.ws.send(JSON.stringify({
-        method: 'unsubscribeTokenTrade',
-        keys: [mint],
-      }));
+    this._subscribedTokens.delete(mint);
+    for (const stream of this.streams) {
+      if (stream.ws && stream.ws.readyState === WebSocket.OPEN) {
+        stream.ws.send(JSON.stringify({ method: 'unsubscribeTokenTrade', keys: [mint] }));
+      }
     }
   }
 
-  /**
-   * Clean up old token subscriptions to prevent memory leak
-   * Called periodically or when token count exceeds threshold
-   */
   cleanupSubscriptions(activeMints) {
-    if (!this._subscribedTokens) return;
     const activeSet = new Set(activeMints);
     const toRemove = [];
     for (const mint of this._subscribedTokens) {
       if (!activeSet.has(mint)) toRemove.push(mint);
     }
-    if (toRemove.length > 0) {
-      for (const mint of toRemove) this._subscribedTokens.delete(mint);
-      if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-        this.ws.send(JSON.stringify({
-          method: 'unsubscribeTokenTrade',
-          keys: toRemove,
-        }));
+    if (toRemove.length === 0) return;
+    for (const mint of toRemove) this._subscribedTokens.delete(mint);
+    for (const stream of this.streams) {
+      if (stream.ws && stream.ws.readyState === WebSocket.OPEN) {
+        stream.ws.send(JSON.stringify({ method: 'unsubscribeTokenTrade', keys: toRemove }));
       }
-      logger.debug(`Cleaned up ${toRemove.length} token subscriptions`);
     }
+    logger.debug(`Cleaned up ${toRemove.length} token subscriptions across ${this.streams.length} streams`);
+  }
+
+  getStreamStatus() {
+    return this.streams.map(s => ({
+      name: s.name,
+      state: s.ws ? ['CONNECTING','OPEN','CLOSING','CLOSED'][s.ws.readyState] : 'NONE',
+      attempts: s.reconnectAttempts,
+    }));
   }
 }
 
