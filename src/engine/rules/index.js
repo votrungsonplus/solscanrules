@@ -16,6 +16,7 @@ const bondingCurveProgressRule = require('./market/bonding-curve-progress.rule')
 const newWalletAccumulationRule = require('./buyers/new-wallet-accumulation.rule');
 const first7BuyersHoldLimitRule = require('./buyers/first-7-buyers-hold-limit.rule');
 const earlyBuyerCountCheckRule = require('./buyers/early-buyer-count-check.rule');
+const newWalletTotalHoldLimitRule = require('./buyers/new-wallet-total-hold-limit.rule');
 
 function buildDefaultRules() {
   return [
@@ -37,6 +38,8 @@ function buildDefaultRules() {
     newWalletAccumulationRule(),
     first7BuyersHoldLimitRule(),
     earlyBuyerCountCheckRule(),
+    // Final gate — đặt cuối cùng để hiển thị sau các rule khác
+    newWalletTotalHoldLimitRule(),
   ];
 }
 
