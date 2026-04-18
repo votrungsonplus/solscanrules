@@ -161,16 +161,7 @@ class Orchestrator extends EventEmitter {
     // 3. Load persistent settings from DB
     const savedRuleStates = tracker.getAllRuleStates();
     ruleEngine.loadStates(savedRuleStates);
-    {
-      const savedProfile = tracker.getBotSetting('activeRuleProfile', 'custom');
-      const knownIds = new Set(require('../engine/rule-profiles').getRuleProfiles().map((p) => p.id));
-      const validProfile = (savedProfile === 'custom' || knownIds.has(savedProfile)) ? savedProfile : 'custom';
-      if (validProfile !== savedProfile) {
-        tracker.saveBotSetting('activeRuleProfile', validProfile);
-        logger.info(`Migrated activeRuleProfile "${savedProfile}" → "${validProfile}" (profile no longer exists)`);
-      }
-      ruleEngine.setActiveProfile(validProfile);
-    }
+    ruleEngine.setActiveProfile(tracker.getBotSetting('activeRuleProfile', 'custom'));
     
     const savedAutoBuy = tracker.getBotSetting('autoBuyEnabled');
     if (savedAutoBuy !== null) {

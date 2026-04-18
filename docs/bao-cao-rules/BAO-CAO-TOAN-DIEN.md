@@ -77,16 +77,16 @@ CHẶN nếu:
 | Tham số | Biến ENV | Mặc định | Mô tả |
 |---------|----------|----------|-------|
 | X | `RULE_ACCUMULATION_CHECK_X` | 5 | Số ví mua đầu tiên cần kiểm tra |
-| Y | `RULE_ACCUMULATION_MAX_PCT` | 30% | Ngưỡng % tổng cung tối đa |
+| Y | `RULE_ACCUMULATION_MAX_PCT` | 15% | Ngưỡng % tổng cung tối đa |
 | includeBundleAsNew | (dashboard toggle) | true | Có tính ví bundle vào ví mới không |
 
-### Giá trị trong profile mặc định:
-
-> **Cập nhật v2.1**: Đã gộp 3 profile (`strict_current`, `balanced_backup3`, `loose_backup2`) thành **1 profile duy nhất** tên hiển thị `Cấu hình mặc định` (giữ ID `strict_current` để tương thích DB).
+### Giá trị trong từng profile:
 
 | Profile | X | Y | includeBundleAsNew |
 |---------|---|---|-------------------|
-| Cấu hình mặc định (`strict_current`) | 5 | 20% | Có |
+| strict_current | 5 | 10% | Có |
+| balanced_backup3 | 5 | 15% | Có |
+| loose_backup2 | 5 | 20% | Có |
 
 ---
 
