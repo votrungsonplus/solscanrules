@@ -95,6 +95,8 @@ const settings = {
     // New Wallet Accumulation rule
     accumulationCheckFirstX: parseInt(process.env.RULE_ACCUMULATION_CHECK_X || '5'),
     accumulationMaxPercent: parseFloat(process.env.RULE_ACCUMULATION_MAX_PCT || '30'),
+    // New Wallet Total Hold Limit rule (final gate)
+    newWalletTotalHoldMaxPercent: parseFloat(process.env.RULE_NEW_WALLET_TOTAL_HOLD_MAX || '15'),
   },
 };
 
