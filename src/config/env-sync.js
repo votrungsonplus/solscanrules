@@ -74,6 +74,17 @@ function getEnvMap(settings, ruleEngine) {
     RULE_TOLERANCE_PCT: String(rv('same_buy_amount', 'tolerancePercent', settings.rules.tolerancePercent)),
     RULE_ACCUMULATION_CHECK_X: String(rv('new_wallet_accumulation', 'checkFirstXBuyers', settings.rules.accumulationCheckFirstX)),
     RULE_ACCUMULATION_MAX_PCT: String(rv('new_wallet_accumulation', 'maxAccumulationPercent', settings.rules.accumulationMaxPercent)),
+    RULE_NEW_WALLET_TOTAL_HOLD_MAX: String(rv('new_wallet_total_hold_limit', 'maxPercent', settings.rules.newWalletTotalHoldMaxPercent)),
+    RULE_MAX_MC_SOL: String(rv('launch_mcap_ceiling', 'maxMarketCapSol', settings.rules.maxMarketCapSol)),
+    RULE_WHALE_MAX_TOTAL_SOL: String(rv('whale_buy_concentration', 'maxTotalSol', settings.rules.whaleMaxTotalSol)),
+
+    // ── Anti-top-buy guard ──
+    ANTI_TOP_BUY_ENABLED: String(settings.antiTopBuy.enabled),
+    ANTI_TOP_BUY_DELAY_MS: String(settings.antiTopBuy.delayMs),
+    ANTI_TOP_BUY_MAX_DRIFT_PCT: String(settings.antiTopBuy.maxDriftPercent),
+
+    // ── Holder cache TTL ──
+    HOLDER_CACHE_TTL_MS: String(settings.holderCache.ttlMs),
   };
 }
 

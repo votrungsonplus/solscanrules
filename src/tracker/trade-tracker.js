@@ -647,6 +647,65 @@ class TradeTracker {
   }
 
   /**
+   * DB Cleanup — xoá dữ liệu cũ để tránh DB phình to (5GB+).
+   *
+   * - token_scans: giữ N ngày gần nhất
+   * - detected_tokens: giữ M ngày gần nhất
+   * - passed_tokens: KHÔNG xoá (lưu ATH lifetime để thống kê)
+   * - trades / real_positions: KHÔNG xoá (lịch sử PnL)
+   *
+   * Chạy VACUUM sau khi delete để giảm file size thực sự (SQLite lazy free).
+   * Trả về số dòng đã xoá.
+   */
+  cleanup({ keepScansDays = 7, keepDetectedDays = 14, runVacuum = false } = {}) {
+    if (!this.db) return { scansDeleted: 0, detectedDeleted: 0 };
+    try {
+      const scansSince = Date.now() - keepScansDays * 24 * 60 * 60 * 1000;
+      const detectedSince = Date.now() - keepDetectedDays * 24 * 60 * 60 * 1000;
+
+      // Giữ lại scans của các mint đã pass (cho post-mortem analysis)
+      const scansResult = this.db.prepare(`
+        DELETE FROM token_scans
+        WHERE timestamp < ?
+          AND mint NOT IN (SELECT mint FROM passed_tokens)
+      `).run(scansSince);
+
+      const detectedResult = this.db.prepare(`
+        DELETE FROM detected_tokens
+        WHERE timestamp < ?
+          AND mint NOT IN (SELECT mint FROM passed_tokens)
+      `).run(detectedSince);
+
+      logger.info(`🗑️ DB cleanup: deleted ${scansResult.changes} scans + ${detectedResult.changes} detected (keep: ${keepScansDays}d scans, ${keepDetectedDays}d detected)`);
+
+      if (runVacuum) {
+        const before = this._dbFileSize();
+        this.db.exec('VACUUM');
+        const after = this._dbFileSize();
+        if (before > 0 && after > 0) {
+          const savedMb = ((before - after) / 1024 / 1024).toFixed(1);
+          logger.info(`🗜️ VACUUM: ${(before / 1024 / 1024).toFixed(0)}MB → ${(after / 1024 / 1024).toFixed(0)}MB (saved ${savedMb}MB)`);
+        }
+      }
+
+      return { scansDeleted: scansResult.changes, detectedDeleted: detectedResult.changes };
+    } catch (err) {
+      logger.error(`DB cleanup failed: ${err.message}`);
+      return { scansDeleted: 0, detectedDeleted: 0, error: err.message };
+    }
+  }
+
+  _dbFileSize() {
+    try {
+      const fs = require('fs');
+      const dbPath = require('path').join(__dirname, '../../data/trades.db');
+      return fs.existsSync(dbPath) ? fs.statSync(dbPath).size : 0;
+    } catch (err) {
+      return 0;
+    }
+  }
+
+  /**
    * Reset all trade and scan data (Wipe DB tables)
    */
   resetData() {
