@@ -287,6 +287,35 @@ class Orchestrator extends EventEmitter {
 
     // 10. Start Safety Stop Loss checker (every 60s)
     this._startSafetyCheck();
+
+    // 11. Start periodic DB cleanup (giữ DB nhỏ gọn, tránh phình > 1GB)
+    this._startDbCleanup();
+  }
+
+  _startDbCleanup() {
+    const cfg = settings.dbCleanup || {};
+    if (!cfg.enabled) {
+      logger.info('🗑️ DB cleanup: disabled (DB_CLEANUP_ENABLED=false)');
+      return;
+    }
+
+    const intervalMs = (cfg.runIntervalHours || 24) * 60 * 60 * 1000;
+    const runOnce = () => {
+      try {
+        tracker.cleanup({
+          keepScansDays: cfg.keepScansDays || 7,
+          keepDetectedDays: cfg.keepDetectedDays || 14,
+          runVacuum: false, // VACUUM nặng, để chạy bằng tay khi cần
+        });
+      } catch (err) {
+        logger.error(`DB cleanup error: ${err.message}`);
+      }
+    };
+
+    // Lần đầu sau 5 phút (cho bot khởi động xong, RPC ổn định)
+    setTimeout(runOnce, 5 * 60 * 1000);
+    this.dbCleanupInterval = setInterval(runOnce, intervalMs);
+    logger.info(`🗑️ DB cleanup scheduled: keep ${cfg.keepScansDays}d scans, ${cfg.keepDetectedDays}d detected, every ${cfg.runIntervalHours}h`);
   }
 
   /**
@@ -564,7 +593,9 @@ class Orchestrator extends EventEmitter {
    */
   async _fetchTokenHolders(mint, deployer, earlyBuyerWallets = [], bundleWallets = new Set(), tokenTimestamp = Date.now()) {
     try {
-      const cacheTtlMs = 20000;
+      // Cache TTL configurable. Mặc định 8s (giảm từ 20s) — tránh false-pass do cache cũ
+      // ngay sát ngưỡng MCap. Có thể chỉnh qua HOLDER_CACHE_TTL_MS env.
+      const cacheTtlMs = settings.holderCache?.ttlMs ?? 8000;
       const cached = this.holderStatsCache.get(mint);
       if (cached && Date.now() - cached.timestamp < cacheTtlMs) {
         return cached.data;
@@ -1197,6 +1228,16 @@ class Orchestrator extends EventEmitter {
           return;
         }
 
+        // === ANTI-TOP-BUY GUARD ===
+        // Data: 46% pass có ATH = launch_mcap (pump-then-dump tại đỉnh).
+        // Đợi N ms để xem giá có dump không; nếu dump >X% thì skip alert/buy.
+        const guardSkip = await this._antiTopBuyGuard(mint, tokenData);
+        if (guardSkip) {
+          this.passedTokens.add(mint); // mark để không retry, nhưng KHÔNG ghi passed_tokens
+          this._clearPendingRecheck(mint);
+          return;
+        }
+
         this.passedTokens.add(mint);
 
         // === Refresh mcap right before sending alert (tokenData.marketCapSol may have been updated by trades) ===
@@ -1342,6 +1383,93 @@ class Orchestrator extends EventEmitter {
   _getMaxAgeMinutes() {
     const rule = ruleEngine.rules.get('listing_age_limit');
     return (rule && rule.enabled) ? (rule.maxMinutes || 5) : 5;
+  }
+
+  /**
+   * Anti-top-buy guard
+   * Đợi delayMs sau khi pass rules. Nếu marketCapSol giảm > maxDriftPercent
+   * trong khoảng đợi → token đang dump tại đỉnh → skip alert/buy.
+   *
+   * Returns: true nếu nên SKIP, false nếu OK tiếp tục.
+   *
+   * Lý do: data cho thấy 46% pass có ATH ngay tại pass timestamp,
+   * tức là token pump nhân tạo rồi dump trong vài giây sau pass.
+   * Đợi 5s và check drift loại được phần lớn nhóm này.
+   */
+  async _antiTopBuyGuard(mint, tokenData) {
+    const cfg = settings.antiTopBuy || {};
+    if (!cfg.enabled) return false;
+    const delayMs = Math.max(0, cfg.delayMs || 0);
+    if (delayMs === 0) return false;
+
+    const mcAtPass = tokenData.marketCapSol || 0;
+    if (mcAtPass <= 0) return false; // không có baseline để so sánh
+
+    const maxDrift = (cfg.maxDriftPercent ?? 8) / 100;
+
+    logger.debug(`🛡️ Anti-top-buy guard: chờ ${delayMs}ms cho ${tokenData.symbol} (MC ${mcAtPass.toFixed(1)} SOL)...`);
+    await new Promise((r) => setTimeout(r, delayMs));
+
+    const fresh = this.tokenData.get(mint);
+    const mcNow = fresh?.marketCapSol || 0;
+    if (mcNow <= 0) {
+      // Không nhận được trade event nào trong delay — không có tín hiệu dump.
+      // Chấp nhận tiếp tục.
+      return false;
+    }
+
+    const drift = (mcAtPass - mcNow) / mcAtPass; // > 0 nghĩa là MC giảm
+    if (drift > maxDrift) {
+      const dropPct = (drift * 100).toFixed(1);
+      logger.info(`⏭ Skipped ${tokenData.symbol}: MC dropped ${dropPct}% trong ${delayMs}ms sau pass — likely top buy (${mcAtPass.toFixed(1)}→${mcNow.toFixed(1)} SOL)`);
+
+      // Ghi scan note để dashboard hiển thị, nhưng KHÔNG ghi passed_tokens
+      try {
+        tracker.recordScan({
+          mint,
+          tokenName: tokenData.name,
+          tokenSymbol: tokenData.symbol,
+          deployer: tokenData.deployer,
+          ruleResult: {
+            shouldBuy: false,
+            summary: `🛡️ Anti-top-buy: MC giảm ${dropPct}% trong ${delayMs}ms sau pass`,
+            results: [{
+              ruleId: 'anti_top_buy_guard',
+              ruleName: 'Anti-Top-Buy Guard',
+              ruleType: 'POST-PASS',
+              passed: false,
+              reason: `MC ${mcAtPass.toFixed(1)} → ${mcNow.toFixed(1)} SOL (-${dropPct}%) trong ${delayMs}ms`,
+            }],
+          },
+          actionTaken: 'BLOCKED',
+          isFinal: true,
+          timestamp: Date.now(),
+        });
+
+        webServer.emit('analysisResult', {
+          tokenData: { ...tokenData, marketCapSol: mcNow, analysisTimestamp: Date.now() },
+          ruleResult: {
+            shouldBuy: false,
+            summary: `🛡️ Anti-top-buy skip: MC -${dropPct}% trong ${delayMs}ms`,
+            results: [{
+              ruleId: 'anti_top_buy_guard',
+              ruleName: 'Anti-Top-Buy Guard',
+              ruleType: 'POST-PASS',
+              passed: false,
+              reason: `MC ${mcAtPass.toFixed(1)} → ${mcNow.toFixed(1)} SOL (-${dropPct}%)`,
+            }],
+          },
+          isFinal: true,
+        });
+      } catch (err) {
+        logger.debug(`Anti-top-buy emit/record failed: ${err.message}`);
+      }
+
+      return true;
+    }
+
+    logger.debug(`✅ Anti-top-buy guard pass: ${tokenData.symbol} MC drift ${(drift * 100).toFixed(1)}% (<= ${(maxDrift * 100).toFixed(0)}%)`);
+    return false;
   }
 
   /**

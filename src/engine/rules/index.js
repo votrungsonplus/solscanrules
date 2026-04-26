@@ -17,6 +17,8 @@ const newWalletAccumulationRule = require('./buyers/new-wallet-accumulation.rule
 const first7BuyersHoldLimitRule = require('./buyers/first-7-buyers-hold-limit.rule');
 const earlyBuyerCountCheckRule = require('./buyers/early-buyer-count-check.rule');
 const newWalletTotalHoldLimitRule = require('./buyers/new-wallet-total-hold-limit.rule');
+const launchMcapCeilingRule = require('./market/launch-mcap-ceiling.rule');
+const whaleBuyConcentrationRule = require('./buyers/whale-buy-concentration.rule');
 
 function buildDefaultRules() {
   return [
@@ -32,6 +34,8 @@ function buildDefaultRules() {
     volumeThresholdRule(),
     listingAgeLimitRule(),
     marketCapCheckRule(),
+    launchMcapCeilingRule(), // mới: chặn pass khi MCap đã quá đỉnh
+    whaleBuyConcentrationRule(), // mới: chặn whale dump risk
     devRiskCheckRule(),
     tokenScoreCheckRule(),
     bondingCurveProgressRule(),
