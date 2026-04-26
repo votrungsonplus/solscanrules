@@ -3,9 +3,11 @@ const settings = require('../../../config/settings');
 module.exports = () => ({
   id: 'same_buy_amount',
   name: 'Same Buy Amount Detection',
-  description: 'Phát hiện các ví mua cùng lượng SOL giống nhau (cabal signal)',
+  // Data-driven: 309 token có signal này → 34% dud, 23% win 2x (xấu hơn baseline 26%/30%).
+  // Chuyển từ ALERT sang BLOCK để loại nhóm bot/bundle giả cabal.
+  description: 'Chặn nếu 3+ ví mua cùng lượng SOL (bot/bundle signal — không phải cabal có lợi)',
   enabled: true,
-  type: 'ALERT',
+  type: 'BLOCK',
   tolerancePercent: settings.rules.tolerancePercent,
   evaluate: (ctx) => {
     const { earlyBuyerTrades, clusterAnalysis } = ctx;

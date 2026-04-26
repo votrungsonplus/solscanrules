@@ -77,14 +77,22 @@ const settings = {
   logLevel: process.env.LOG_LEVEL || 'info',
 
   // Rules Engine Defaults (Synchronized with Dashboard)
+  // Các default này đã được điều chỉnh dựa trên phân tích 2,205 pass token
+  // (báo cáo: docs/bao-cao-rules/BAO-CAO-TOAN-DIEN.md)
   rules: {
-    minMarketCapSol: parseFloat(process.env.RULE_MIN_MC_SOL || process.env.MIN_MARKET_CAP_SOL || '80'),
-    maxMinutes: parseInt(process.env.RULE_MAX_AGE_MIN || '5'),
-    maxPercentTop10: parseFloat(process.env.RULE_TOP10_MAX_PCT || '28'),
+    // Floor MCap nâng từ 80→100 (loại bỏ vùng 80-100 SOL có dud rate ~35%)
+    minMarketCapSol: parseFloat(process.env.RULE_MIN_MC_SOL || process.env.MIN_MARKET_CAP_SOL || '100'),
+    // Ceiling MCap mới: chặn pass khi đã quá đỉnh (>250 SOL = vào sau ATH)
+    maxMarketCapSol: parseFloat(process.env.RULE_MAX_MC_SOL || '250'),
+    maxMinutes: parseInt(process.env.RULE_MAX_AGE_MIN || '8'),
+    // Top10 max siết 28→50 (sweet spot 15-50% cho tỉ lệ win/dud tốt nhất)
+    maxPercentTop10: parseFloat(process.env.RULE_TOP10_MAX_PCT || '50'),
     minPercentTop10: parseFloat(process.env.RULE_TOP10_MIN_PCT || '15'),
-    maxPercentDev: parseFloat(process.env.RULE_DEV_HOLD_MAX_PCT || '20'),
-    maxPercentBundle: parseFloat(process.env.RULE_BUNDLE_MAX_PCT || '20'),
-    minVol: parseFloat(process.env.RULE_MIN_VOL_SOL || '30'),
+    // Dev hold siết về 30 (data: <2% là đa số, >30% rất hiếm + risky)
+    maxPercentDev: parseFloat(process.env.RULE_DEV_HOLD_MAX_PCT || '30'),
+    // Bundle siết 20→10 (data: bundle 5-10% có dud thấp nhất, >10% rủi ro cao)
+    maxPercentBundle: parseFloat(process.env.RULE_BUNDLE_MAX_PCT || '10'),
+    minVol: parseFloat(process.env.RULE_MIN_VOL_SOL || '90'),
     minGlobalFee: parseFloat(process.env.RULE_MIN_GLOBAL_FEE || process.env.GLOBAL_FEE_THRESHOLD || '0.3'),
     minSharedFunders: parseInt(process.env.RULE_MIN_FUNDERS || '2'),
     maxRiskScore: parseInt(process.env.RULE_MAX_RISK || '50'),
@@ -92,11 +100,35 @@ const settings = {
     maxProgressPercent: parseFloat(process.env.RULE_MAX_PROGRESS || '80'),
     maxPercentFirst7Buyers: parseFloat(process.env.RULE_MAX_PCT_7_BUYERS || '25'),
     tolerancePercent: parseFloat(process.env.RULE_TOLERANCE_PCT || '10'),
+    // Whale buy concentration: tổng SOL của early buyers (data: >20 SOL = 42% dud)
+    whaleMaxTotalSol: parseFloat(process.env.RULE_WHALE_MAX_TOTAL_SOL || '15'),
     // New Wallet Accumulation rule
     accumulationCheckFirstX: parseInt(process.env.RULE_ACCUMULATION_CHECK_X || '5'),
-    accumulationMaxPercent: parseFloat(process.env.RULE_ACCUMULATION_MAX_PCT || '30'),
+    accumulationMaxPercent: parseFloat(process.env.RULE_ACCUMULATION_MAX_PCT || '25'),
     // New Wallet Total Hold Limit rule (final gate)
     newWalletTotalHoldMaxPercent: parseFloat(process.env.RULE_NEW_WALLET_TOTAL_HOLD_MAX || '15'),
+  },
+
+  // Anti-top-buy: trước khi pass alert/buy, đợi N ms để xem giá có dump không.
+  // Giải quyết "46% pass tại đỉnh" — token pump rồi dump ngay sau pass.
+  antiTopBuy: {
+    enabled: process.env.ANTI_TOP_BUY_ENABLED !== 'false', // mặc định BẬT
+    delayMs: parseInt(process.env.ANTI_TOP_BUY_DELAY_MS || '5000'),
+    maxDriftPercent: parseFloat(process.env.ANTI_TOP_BUY_MAX_DRIFT_PCT || '8'), // skip nếu MC giảm > 8%
+  },
+
+  // DB cleanup: tự động xoá scans cũ để tránh phình DB (5GB+)
+  dbCleanup: {
+    enabled: process.env.DB_CLEANUP_ENABLED !== 'false',
+    keepScansDays: parseInt(process.env.DB_KEEP_SCANS_DAYS || '7'),
+    keepDetectedDays: parseInt(process.env.DB_KEEP_DETECTED_DAYS || '14'),
+    runIntervalHours: parseInt(process.env.DB_CLEANUP_INTERVAL_HOURS || '24'),
+  },
+
+  // Holder stats cache TTL (ms) — cao tốt cho rescan, thấp tốt cho data tươi
+  // Khi MC sát ngưỡng pass, dùng TTL ngắn để tránh false positive
+  holderCache: {
+    ttlMs: parseInt(process.env.HOLDER_CACHE_TTL_MS || '8000'), // giảm 20s → 8s
   },
 };
 
