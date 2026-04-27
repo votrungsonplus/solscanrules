@@ -1377,11 +1377,11 @@ a { text-decoration: none; color: inherit; }
 .passed-list, .top10-list, .trade-list {
     flex: 1;
     overflow-y: auto;
-    display: flex;
-    flex-direction: column;
-    gap: 7px;
+    display: block;
     min-height: 0;
 }
+.passed-list > *, .top10-list > *, .trade-list > * { margin-bottom: 7px; }
+.passed-list > *:last-child, .top10-list > *:last-child, .trade-list > *:last-child { margin-bottom: 0; }
 
 .passed-row {
     padding: 11px 12px;
@@ -1392,6 +1392,7 @@ a { text-decoration: none; color: inherit; }
     transition: var(--transition);
     position: relative;
     overflow: hidden;
+    flex-shrink: 0;
 }
 .passed-row::before {
     content: '';
@@ -1521,6 +1522,7 @@ a { text-decoration: none; color: inherit; }
     cursor: pointer;
     transition: var(--transition);
     position: relative;
+    flex-shrink: 0;
 }
 .trade-row:hover {
     background: var(--bg-card-hover);
@@ -1608,16 +1610,17 @@ a { text-decoration: none; color: inherit; }
 .settings-content {
     flex: 1;
     overflow-y: auto;
-    display: flex;
-    flex-direction: column;
-    gap: 14px;
+    display: block;
     padding-right: 4px;
 }
+.settings-content > * { margin-bottom: 14px; }
+.settings-content > *:last-child { margin-bottom: 0; }
 .config-section {
     padding: 14px;
     background: var(--bg-card);
     border: 1px solid var(--border);
     border-radius: var(--radius-md);
+    flex-shrink: 0;
 }
 .section-head {
     display: flex;
@@ -1836,10 +1839,10 @@ a { text-decoration: none; color: inherit; }
 
 /* Rules list */
 .rules-list {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
+    display: block;
 }
+.rules-list > * { margin-bottom: 6px; }
+.rules-list > *:last-child { margin-bottom: 0; }
 .rule-switch {
     display: flex;
     align-items: flex-start;
@@ -1850,6 +1853,7 @@ a { text-decoration: none; color: inherit; }
     border-radius: var(--radius-md);
     gap: 10px;
     transition: var(--transition-fast);
+    flex-shrink: 0;
 }
 .rule-switch:hover { border-color: var(--border-strong); background: var(--bg-card-hover); }
 
@@ -2164,6 +2168,7 @@ a { text-decoration: none; color: inherit; }
     height: 100%;
     overflow-y: auto;
 }
+.sniper-container > * { flex-shrink: 0; }
 .sniper-head {
     display: flex;
     gap: 12px;
