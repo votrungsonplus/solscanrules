@@ -5,6 +5,8 @@
 
 function renderAnalysisPlaceholder(kind, { title, message, mint }) {
     if (!liveAnalysis) return;
+    liveAnalysis.dataset.launchMcapUsd = '';
+    liveAnalysis.dataset.analysisMint = mint || '';
     const iconMap = {
         loading: '<i class="fas fa-spinner fa-spin"></i>',
         error: '<i class="fas fa-exclamation-triangle"></i>',
@@ -232,11 +234,41 @@ socket.on('tokenPriceUpdate', (data) => {
     const currentMcapUsd = marketCapUsd || (marketCapSol * priceUsd);
 
     if (selectedMint === mint) {
-        const currentMcVal = document.querySelector('.info-grid .val.yellow');
-        if (currentMcVal) currentMcVal.textContent = '$' + formatNumber(currentMcapUsd);
+        const launchMcapUsd = parseFloat(liveAnalysis?.dataset?.launchMcapUsd) || 0;
+        const currentMcVal = document.getElementById('analysisCurrentMcapUsd');
+        const currentMcSol = document.getElementById('analysisCurrentMcapSol');
+        const currentRoi = document.getElementById('analysisCurrentRoi');
+        const currentPnl = document.getElementById('analysisCurrentPnl');
+        const refreshMeta = document.getElementById('analysisRefreshMeta');
+        const feeVal = document.getElementById('analysisGlobalFee');
+        const currentCard = currentMcVal?.closest('.snapshot-card');
 
-        const feeVal = document.querySelector('.info-grid .val.highlight-val.yellow');
-        if (feeVal) feeVal.textContent = globalFee.toFixed(4) + ' SOL';
+        if (currentMcVal) currentMcVal.textContent = '$' + formatNumber(currentMcapUsd);
+        if (currentMcSol) {
+            const currentSol = marketCapSol || (priceUsd > 0 ? currentMcapUsd / priceUsd : 0);
+            currentMcSol.textContent = currentSol > 0 ? `${currentSol.toFixed(2)} SOL` : '---';
+        }
+        if (feeVal && Number.isFinite(globalFee)) feeVal.textContent = `${globalFee.toFixed(4)} SOL`;
+        if (refreshMeta) refreshMeta.textContent = 'vừa cập nhật';
+
+        if (launchMcapUsd > 0 && currentMcapUsd > 0) {
+            const roiValue = currentMcapUsd / launchMcapUsd;
+            const pnlValue = ((currentMcapUsd - launchMcapUsd) / launchMcapUsd) * 100;
+            const tone = pnlValue > 0 ? 'positive' : pnlValue < 0 ? 'negative' : 'neutral';
+
+            if (currentRoi) {
+                currentRoi.textContent = `x${roiValue.toFixed(2)}`;
+                currentRoi.className = tone;
+            }
+            if (currentPnl) {
+                currentPnl.textContent = `${pnlValue >= 0 ? '+' : ''}${pnlValue.toFixed(1)}%`;
+                currentPnl.className = tone;
+            }
+            if (currentCard) {
+                currentCard.classList.remove('positive', 'negative', 'neutral');
+                currentCard.classList.add(tone);
+            }
+        }
     }
 
     const rows = document.querySelectorAll(`[data-mint="${mint}"]`);
@@ -306,19 +338,29 @@ function requestPassedTokenInfo(tokenOrMint) {
     if (typeof tokenOrMint === 'object') {
         const launchMcapUsd = tokenOrMint.launch_mcap_usd || 0;
         const highestMcapUsd = tokenOrMint.highest_mcap_usd || launchMcapUsd;
+        const currentMcapUsd = tokenOrMint.current_mcap_usd || highestMcapUsd;
+        const launchMcapSol = tokenOrMint.launch_mcap_sol || 0;
+        const highestMcapSol = tokenOrMint.highest_mcap_sol || launchMcapSol;
+        const currentMcapSol = tokenOrMint.current_mcap_sol || highestMcapSol || launchMcapSol;
 
         renderAnalysis({
             infoOnly: true,
             tokenData: {
                 mint,
-                name: tokenOrMint.name || 'Khong ro',
+                name: tokenOrMint.name || 'Không rõ',
                 symbol: tokenOrMint.symbol || '???',
+                deployer: tokenOrMint.deployer || '',
                 timestamp: tokenOrMint.timestamp || Date.now(),
                 launchMcapUsd,
+                launchMcapSol,
                 highestMcapUsd,
+                highestMcapSol,
                 highestMcapTimestamp: tokenOrMint.highest_mcap_timestamp || null,
-                marketCapUsd: highestMcapUsd,
-                circulatingMcapUsd: highestMcapUsd,
+                currentMcapUsd,
+                currentMcapSol,
+                marketCapUsd: currentMcapUsd || highestMcapUsd,
+                circulatingMcapUsd: currentMcapUsd || highestMcapUsd,
+                refreshedAt: tokenOrMint.refreshed_at || tokenOrMint.refreshedAt || null,
             },
             ruleResult: {
                 shouldBuy: true,

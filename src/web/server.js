@@ -42,6 +42,7 @@ class WebServer {
       if (!scan) return null;
 
       const parsedRuleResult = safeParseJson(scan.rule_result, null);
+      const passedToken = tracker.getPassedTokenByMint(scan.mint);
       const ruleResult = parsedRuleResult || {
         shouldBuy: String(scan.rule_result || '').includes('PASS'),
         summary: scan.rule_result || 'No rule result',
@@ -57,6 +58,14 @@ class WebServer {
           deployer: scan.deployer,
           timestamp: scan.timestamp,
           marketCapSol: scan.market_cap_sol, // From the new DB column
+          launchMcapUsd: passedToken?.launch_mcap_usd || undefined,
+          launchMcapSol: passedToken?.launch_mcap_sol || undefined,
+          highestMcapUsd: passedToken?.highest_mcap_usd || undefined,
+          highestMcapSol: passedToken?.highest_mcap_sol || undefined,
+          currentMcapUsd: passedToken?.current_mcap_usd || undefined,
+          currentMcapSol: passedToken?.current_mcap_sol || undefined,
+          highestMcapTimestamp: passedToken?.highest_mcap_timestamp || undefined,
+          refreshedAt: passedToken?.refreshed_at || passedToken?.refreshedAt || undefined,
           ...overrides.tokenData,
         },
         ruleResult: overrides.ruleResult || ruleResult,

@@ -38,8 +38,34 @@ io.on('connection', (socket) => {
   socket.emit('initialScans', []);
 
   socket.emit('passedTokensUpdate', [
-    { mint: 'AbC123xYz456AbC123xYz456AbC123xYz456AbC123xy', symbol: 'PEPE2', launch_mcap_usd: 8500, highest_mcap_usd: 52000, timestamp: Date.now() - 3600000 },
-    { mint: 'JkL901mNp234JkL901mNp234JkL901mNp234JkL901mn', symbol: 'WIF2', launch_mcap_usd: 12000, highest_mcap_usd: 89000, timestamp: Date.now() - 7200000 },
+    {
+      mint: 'AbC123xYz456AbC123xYz456AbC123xYz456AbC123xy',
+      symbol: 'PEPE2',
+      name: 'Pepe Returns',
+      launch_mcap_usd: 8500,
+      launch_mcap_sol: 57.2,
+      highest_mcap_usd: 52000,
+      highest_mcap_sol: 350.1,
+      current_mcap_usd: 31800,
+      current_mcap_sol: 214.1,
+      refreshed_at: Date.now() - 90000,
+      highest_mcap_timestamp: Date.now() - 1800000,
+      timestamp: Date.now() - 3600000
+    },
+    {
+      mint: 'JkL901mNp234JkL901mNp234JkL901mNp234JkL901mn',
+      symbol: 'WIF2',
+      name: 'DogWifHat2',
+      launch_mcap_usd: 12000,
+      launch_mcap_sol: 80.8,
+      highest_mcap_usd: 89000,
+      highest_mcap_sol: 599.2,
+      current_mcap_usd: 44100,
+      current_mcap_sol: 296.9,
+      refreshed_at: Date.now() - 720000,
+      highest_mcap_timestamp: Date.now() - 5400000,
+      timestamp: Date.now() - 7200000
+    },
   ]);
 
   socket.emit('tradeHistory', [
@@ -55,12 +81,21 @@ io.on('connection', (socket) => {
         symbol: 'PEPE2',
         name: 'Pepe Returns',
         deployer: 'Dev123456789abcDev123456789abcDev123456789ab',
-        marketCapSol: 42.5,
-        marketCapUsd: 6308,
+        launchMcapUsd: 8500,
+        launchMcapSol: 57.2,
+        highestMcapUsd: 52000,
+        highestMcapSol: 350.1,
+        highestMcapTimestamp: Date.now() - 1800000,
+        currentMcapUsd: 31800,
+        currentMcapSol: 214.1,
+        refreshedAt: Date.now() - 90000,
+        marketCapSol: 214.1,
+        marketCapUsd: 31800,
         vSolInBondingCurve: 18.2,
         bondingCurveProgress: 21.4,
         globalFee: 0.85,
         timestamp: Date.now() - 120000,
+        analysisTimestamp: Date.now() - 45000,
       },
       ruleResult: {
         shouldBuy: true,
@@ -93,9 +128,19 @@ io.on('connection', (socket) => {
         uriScore: 12,
       },
       holderStats: {
+        realHolderCount: 187,
+        filteredFunctionalCount: 14,
         top10Percent: 18.5,
+        top10OwnersPercent: 15.3,
         devHoldPercent: 5.2,
-        clusterHoldPercent: 8.1,
+        bundleHoldPercent: 8.1,
+        earlyBuyerHoldPercent: 12.6,
+        topHolders: [
+          { address: 'TopHolder1111111111111111111111111111111111', percent: 6.2, isDev: true },
+          { address: 'TopHolder2222222222222222222222222222222222', percent: 4.8, isBundle: true },
+          { address: 'PoolHolder3333333333333333333333333333333333', percent: 3.1, isPool: true },
+          { address: 'TopHolder4444444444444444444444444444444444', percent: 2.9 },
+        ],
       },
       clusterAnalysis: {
         isLikelyCluster: true,
