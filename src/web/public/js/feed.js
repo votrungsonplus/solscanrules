@@ -116,6 +116,7 @@ function createFeedItem(token) {
         });
     });
 
+    registerTokenRow(token.mint, item);
     return item;
 }
 
@@ -138,7 +139,10 @@ function addTokenToFeed(token) {
         const keys = [...feedItems.keys()];
         const oldest = keys[0];
         const oldEl = feedItems.get(oldest);
-        if (oldEl) oldEl.remove();
+        if (oldEl) {
+            unregisterTokenRow(oldest, oldEl);
+            oldEl.remove();
+        }
         feedItems.delete(oldest);
     }
 }
@@ -271,7 +275,7 @@ socket.on('tokenPriceUpdate', (data) => {
         }
     }
 
-    const rows = document.querySelectorAll(`[data-mint="${mint}"]`);
+    const rows = getTokenRows(mint);
     rows.forEach(row => {
         const launchMcap = parseFloat(row.dataset.launch) || 0;
         if (launchMcap > 0) {

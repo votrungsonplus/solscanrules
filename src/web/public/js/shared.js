@@ -60,6 +60,7 @@ const SEARCH_TIMEOUT_MS = 20000;
 
 // ── State ──
 let feedItems = new Map(); // mint -> element
+let tokenRowRegistry = new Map(); // mint -> Set of elements (Optimized lookup)
 let currentFilter = 'all';
 let feedCount = 0;
 let startTime = Date.now();
@@ -265,6 +266,37 @@ function formatNumber(num) {
     if (num >= 1_000_000) return (num / 1_000_000).toFixed(1) + 'M';
     if (num >= 1_000) return (num / 1_000).toFixed(1) + 'K';
     return num.toFixed(0);
+}
+
+// ── Row Registry Helpers ──
+function registerTokenRow(mint, element) {
+    if (!mint || !element) return;
+    if (!tokenRowRegistry.has(mint)) {
+        tokenRowRegistry.set(mint, new Set());
+    }
+    tokenRowRegistry.get(mint).add(element);
+}
+
+function unregisterTokenRow(mint, element) {
+    if (!mint || !element) return;
+    const rows = tokenRowRegistry.get(mint);
+    if (rows) {
+        rows.delete(element);
+        if (rows.size === 0) {
+            tokenRowRegistry.delete(mint);
+        }
+    }
+}
+
+function getTokenRows(mint) {
+    return tokenRowRegistry.get(mint) || [];
+}
+
+function unregisterRowsInContainer(container) {
+    if (!container) return;
+    container.querySelectorAll('[data-mint]').forEach(el => {
+        unregisterTokenRow(el.dataset.mint, el);
+    });
 }
 
 // ── Uptime Timer ──
