@@ -126,9 +126,29 @@ const settings = {
   },
 
   // Holder stats cache TTL (ms) — cao tốt cho rescan, thấp tốt cho data tươi
-  // Khi MC sát ngưỡng pass, dùng TTL ngắn để tránh false positive
+  // Adaptive: TTL ngắn khi MC sát ngưỡng pass (tránh false positive)
   holderCache: {
-    ttlMs: parseInt(process.env.HOLDER_CACHE_TTL_MS || '8000'), // giảm 20s → 8s
+    ttlMs: parseInt(process.env.HOLDER_CACHE_TTL_MS || '8000'),
+    // TTL ngắn dùng khi |MC - threshold| / threshold <= nearThresholdPct
+    nearThresholdTtlMs: parseInt(process.env.HOLDER_CACHE_NEAR_TTL_MS || '2000'),
+    nearThresholdPct: parseFloat(process.env.HOLDER_CACHE_NEAR_PCT || '0.10'),
+  },
+
+  // Fast alert mode — emit signal preview tại buyer #1 nếu critical rules pass
+  // (mint_renounce, transfer_fee, dev_risk, launch_mcap_ceiling). Chỉ dashboard,
+  // không telegram, không auto-buy. Giúp giảm 5-15s alert latency.
+  fastAlert: {
+    enabled: process.env.FAST_ALERT_ENABLED !== 'false',
+    rules: (process.env.FAST_ALERT_RULES || 'mint_renounce_check,transfer_fee_check,dev_risk_check,launch_mcap_ceiling,market_cap_check')
+      .split(',').map(s => s.trim()).filter(Boolean),
+  },
+
+  // Direct logs subscription tới PumpFun program — pre-cache (signature, slot)
+  // để bundle detection không phải gọi lại getParsedTransaction chỉ để lấy slot.
+  directLogs: {
+    enabled: process.env.DIRECT_LOGS_ENABLED !== 'false',
+    commitment: process.env.DIRECT_LOGS_COMMITMENT || 'processed', // processed = ~400ms
+    cacheTtlMs: parseInt(process.env.DIRECT_LOGS_CACHE_TTL_MS || (5 * 60 * 1000), 10),
   },
 };
 

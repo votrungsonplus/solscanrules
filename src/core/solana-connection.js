@@ -329,6 +329,16 @@ class SolanaConnection {
   getPublicKey() { return this.wallet?.publicKey; }
   getExecutionConnection() { return this.executionConnection || this.connections[0]; }
 
+  /**
+   * Lấy connection ưu tiên theo category — dùng cho subscribe (WS), không qua failover.
+   * Phục vụ logsSubscribe / accountSubscribe.
+   */
+  getCategoryConnection(category = RPC_CATEGORY.DETECTION) {
+    const indices = this._categoryIndices[category] || this._categoryIndices[RPC_CATEGORY.GENERAL];
+    const idx = (indices && indices[0] != null) ? indices[0] : 0;
+    return this.connections[idx];
+  }
+
   getStats() {
     const now = Date.now();
     return this._endpointStats.map((s, i) => ({
