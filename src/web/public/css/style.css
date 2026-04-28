@@ -151,7 +151,10 @@ a { text-decoration: none; color: inherit; }
 .app-container {
     display: flex;
     flex-direction: column;
+    /* iOS Safari: 100vh tính cả address bar dynamic → nội dung bị cắt khi address bar collapse.
+       100dvh (dynamic viewport height) chuẩn hơn; fallback 100vh cho browser cũ. */
     height: 100vh;
+    height: 100dvh;
     position: relative;
 }
 
@@ -2925,4 +2928,250 @@ a { text-decoration: none; color: inherit; }
     .stat-divider { display: none; }
     .logo-text-group { display: none; }
     .auto-reload-control label { display: none; }
+}
+
+/* ═══════════════════════════════════════════
+   iPhone-specific fixes (375–430px)
+   - iOS 100vh, safe-area-inset, momentum scroll
+   - Touch target ≥ 44pt
+   - Input font-size ≥ 16px chống zoom on focus
+   - Table overflow-x với min-width
+   ═══════════════════════════════════════════ */
+
+/* iOS Safari: tap highlight gọn, đỡ flash xanh khi tap button */
+button, a, .feed-item, .passed-row, .ctrl-tab, .tab, .period-btn, .switch {
+    -webkit-tap-highlight-color: rgba(34, 211, 238, 0.15);
+}
+
+/* Momentum scroll cho mọi scrollable trên iOS */
+.feed-list,
+.passed-list,
+.top10-list,
+.trade-list,
+.buyers-table-container,
+.analysis-content,
+.ctrl-panel,
+.top-stats,
+.settings-content {
+    -webkit-overflow-scrolling: touch;
+}
+
+/* Buyers table: force min-width để columns không bị squash; container scroll-x */
+.buyers-table { min-width: 540px; }
+.buyers-table.compact-table { min-width: 360px; }
+/* Ràng buộc data-table-card không bị tràn ngoài analysis-content */
+.data-table-card { max-width: 100%; overflow: hidden; padding: 8px; }
+
+@media (hover: none) and (pointer: coarse) {
+    /* Touch device: tăng touch target lên Apple HIG (44pt). Áp dụng có chọn lọc, không phá layout */
+    .ctrl-tab { min-height: 48px; padding: 8px 4px; }
+    .feed-tabs .tab { min-height: 40px; padding: 8px 6px; }
+    .period-btn { min-height: 40px; }
+    .search-bar button { min-width: 44px; min-height: 44px; }
+    .switch { min-width: 44px; }
+    .refresh-btn,
+    .action-btn-sm,
+    .copy-btn,
+    .btn-snipe { min-height: 40px; }
+    /* iOS Safari auto-zoom khi input font < 16px → set 16px cho mọi input */
+    input[type="text"],
+    input[type="number"],
+    input[type="search"],
+    select,
+    textarea {
+        font-size: 16px !important;
+    }
+    .config-input { font-size: 16px !important; }
+    .search-bar input { font-size: 16px !important; }
+}
+
+/* iPhone Pro Max / Plus (≤ 480px): bố cục dọc, ưu tiên panel chính */
+@media (max-width: 480px) {
+    /* Safe-area-inset cho notch (top) và home indicator (bottom) */
+    .top-bar {
+        padding-top: max(10px, env(safe-area-inset-top));
+        padding-left: max(14px, env(safe-area-inset-left));
+        padding-right: max(14px, env(safe-area-inset-right));
+        height: auto;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+    .top-bar-left { gap: 8px; flex-wrap: wrap; }
+    .grid-layout {
+        padding: 10px;
+        padding-bottom: max(10px, env(safe-area-inset-bottom));
+        gap: 10px;
+    }
+
+    /* Layout: feed → analysis → controls (1 col); cho phép scroll dọc thoải mái */
+    .grid-layout {
+        grid-template-columns: 1fr;
+        grid-template-rows: auto auto auto;
+        overflow-y: auto;
+    }
+    .col-feed { max-height: 360px; }
+    .col-analysis { min-height: 50vh; }
+    .col-controls { max-height: 60vh; }
+
+    /* Top stats: ẩn các chip ít quan trọng (winrate compact, uptime), giữ SOL/Qua lọc/PnL */
+    .top-stats { gap: 6px; }
+    .stat-chip { padding: 6px 8px; }
+    .stat-chip.winrate.compact,
+    .stat-chip.uptime-chip { display: none; }
+    .stat-chip .chip-body span { display: none; }
+    .stat-chip .chip-body strong { font-size: 13px; }
+
+    /* Auto-reload: gọn lại */
+    .auto-reload-control { padding: 4px 8px 4px 8px; gap: 6px; }
+    .auto-reload-control > i { display: none; }
+
+    /* Connection pill chỉ giữ dot */
+    .connection-pill { padding: 6px 10px; }
+    .connection-label { display: none; }
+
+    /* Control tabs: chia 3 cột × 2 hàng. Trên 380px dưới sẽ chuyển scroll-x. */
+    .control-tabs {
+        grid-template-columns: repeat(3, 1fr);
+        padding: 4px 4px 0;
+    }
+    .ctrl-tab span { font-size: 9px; }
+
+    /* Feed tabs: gọn hơn, chỉ icon trên rất nhỏ */
+    .feed-tabs .tab { padding: 8px 4px; font-size: 10px; }
+    .feed-tabs .tab i { font-size: 11px; }
+
+    /* Panel header: bớt padding */
+    .panel-header { padding: 10px 12px; }
+    .panel-header h2 { font-size: 12px; }
+    .panel-subtitle { display: none; }
+
+    /* Analysis topline: dọc, tránh tràn */
+    .analysis-topline { grid-template-columns: 1fr !important; gap: 12px; }
+    .analysis-side { width: 100%; }
+    .detail-links { flex-wrap: wrap; gap: 6px; }
+    .detail-links a { font-size: 11px; padding: 6px 10px; }
+
+    /* Performance grid: stack dọc (đã 1fr ở 1024px) — tăng padding gọn */
+    .performance-grid { gap: 10px; }
+    .snapshot-card { padding: 12px; }
+
+    /* Analysis intel grid */
+    .analysis-intel-grid { grid-template-columns: 1fr; }
+    .info-card { padding: 12px; }
+    .info-card h4 { font-size: 12px; }
+    .info-card-meta { display: block; font-size: 10px; color: var(--text-muted); margin-top: 2px; }
+
+    /* Holder/buyers table: bắt scroll-x rõ ràng + hint shadow để user biết có thể scroll */
+    .buyers-table-container {
+        position: relative;
+        max-width: calc(100vw - 56px);
+    }
+    .buyers-table-container::after {
+        content: '';
+        position: absolute;
+        top: 0; right: 0; bottom: 0;
+        width: 24px;
+        background: linear-gradient(90deg, transparent, rgba(8, 9, 15, 0.85));
+        pointer-events: none;
+        opacity: 0.7;
+    }
+    .buyers-table th,
+    .buyers-table td {
+        padding: 6px 6px;
+        font-size: 10.5px;
+        white-space: nowrap;
+    }
+
+    /* Passed/trade row: gọn padding, ẩn detail phụ */
+    .passed-row { padding: 10px 12px; }
+    .passed-row .mcap-line { font-size: 10.5px; }
+    .trade-row { padding: 10px 12px; }
+
+    /* Snipe / settings buttons: full width touch-friendly */
+    .sniper-action-btns { grid-template-columns: 1fr; gap: 10px; }
+    .btn-snipe { padding: 14px 16px; font-size: 13px; }
+
+    /* Detail footer / verdict box: cho phép wrap */
+    .detail-footer { font-size: 10px; gap: 6px; }
+    .verdict-box { padding: 12px; font-size: 12px; }
+
+    /* Profile actions */
+    .profile-actions { grid-template-columns: 1fr !important; }
+
+    /* Sub-list trong cluster card: cho phép wrap địa chỉ */
+    .sub-list-row { flex-wrap: wrap; gap: 4px; }
+    .sub-list-row .mono-link { word-break: break-all; font-size: 10px; }
+
+    /* Tablle holder Top 10: ẩn header chữ dài */
+    .compact-table th { font-size: 9px; }
+
+    /* Auto-reload control hide trên rất nhỏ */
+    .auto-reload-control select { font-size: 13px; padding: 4px 6px; }
+
+    /* Notice fast-signal trên mobile: padding gọn */
+    .fast-signal-notice { padding: 8px 10px !important; font-size: 11px !important; }
+}
+
+/* iPhone SE / 12 mini (≤ 380px width): siết thêm */
+@media (max-width: 380px) {
+    .top-stats { gap: 4px; }
+    .stat-chip { padding: 5px 7px; gap: 6px; }
+    .stat-chip .chip-icon i { font-size: 11px; }
+    .stat-chip .chip-body strong { font-size: 12px; }
+
+    /* Control tabs: 6 tabs → scroll horizontal thay vì 3×2 (đỡ chật text) */
+    .control-tabs {
+        grid-template-columns: repeat(6, max-content);
+        overflow-x: auto;
+        scrollbar-width: none;
+    }
+    .control-tabs::-webkit-scrollbar { display: none; }
+    .ctrl-tab { min-width: 70px; padding: 8px 10px; }
+
+    /* Feed tabs giữ 4 cột nhưng giảm padding */
+    .feed-tabs .tab { padding: 6px 2px; }
+    .feed-tabs .tab i { display: none; }
+
+    /* Analysis content: padding nhỏ hơn */
+    .analysis-content { padding: 12px !important; }
+    .detail-card { padding: 12px !important; }
+
+    /* Buyers table container ràng buộc width chặt hơn */
+    .buyers-table-container { max-width: calc(100vw - 40px); }
+    .buyers-table { min-width: 480px; }
+    .buyers-table.compact-table { min-width: 320px; }
+
+    /* Snapshot card padding tối thiểu */
+    .snapshot-card { padding: 10px; }
+    .snapshot-main { font-size: 18px !important; }
+    .snapshot-secondary { font-size: 10px !important; }
+    .snapshot-stats { gap: 4px; }
+    .snapshot-stat { font-size: 9px; }
+
+    /* Section titles: gọn */
+    .section-title { font-size: 11px; padding: 8px 0; }
+
+    /* Hide secondary chips nếu cần thêm */
+    .stat-chip.pnl span { display: none; }
+
+    /* Wallet info bar: cột dọc */
+    .wallet-balance-row,
+    .wallet-address-row { flex-wrap: wrap; gap: 4px; }
+
+    /* Modal-like notices */
+    .empty-state { padding: 20px 16px; }
+    .empty-icon { font-size: 36px; }
+}
+
+/* iOS Safari: prevent rubber-band scroll trên body, giữ scroll trong panel */
+@supports (-webkit-touch-callout: none) {
+    body {
+        -webkit-text-size-adjust: 100%; /* không tự scale text khi xoay ngang */
+        overscroll-behavior-y: none;
+    }
+    .ctrl-panel { overscroll-behavior: contain; }
+    .feed-list,
+    .passed-list,
+    .top10-list,
+    .trade-list { overscroll-behavior: contain; }
 }
