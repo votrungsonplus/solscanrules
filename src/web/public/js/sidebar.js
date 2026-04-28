@@ -18,7 +18,6 @@ socket.on('passedTokensUpdate', (tokens) => {
     }
     if (totalPassedEl) totalPassedEl.textContent = tokens.length;
 
-    unregisterRowsInContainer(passedTokensContainer);
     passedTokensContainer.innerHTML = '';
     for (const token of tokens) {
         const passTime = token.timestamp ? new Date(token.timestamp).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '---';
@@ -70,7 +69,6 @@ socket.on('passedTokensUpdate', (tokens) => {
             requestPassedTokenInfo(token);
         });
 
-        registerTokenRow(token.mint, row);
         passedTokensContainer.appendChild(row);
     }
 });
@@ -84,7 +82,6 @@ socket.on('topPnLUpdate', (tokens) => {
         return;
     }
 
-    unregisterRowsInContainer(top10Container);
     if (top10Container) top10Container.innerHTML = '';
 
     tokens.forEach((token, index) => {
@@ -127,7 +124,6 @@ socket.on('topPnLUpdate', (tokens) => {
             requestPassedTokenInfo(token);
         });
 
-        registerTokenRow(token.mint, row);
         top10Container.appendChild(row);
     });
 });
@@ -163,7 +159,6 @@ socket.on('tradeHistory', (trades) => {
         return;
     }
 
-    unregisterRowsInContainer(tradeHistoryContainer);
     tradeHistoryContainer.innerHTML = '';
     for (const trade of trades) {
         const isBuy = trade.action === 'BUY';
@@ -197,7 +192,6 @@ socket.on('tradeHistory', (trades) => {
                 });
             }
         });
-        registerTokenRow(trade.mint, row);
         tradeHistoryContainer.appendChild(row);
     }
 });
@@ -237,7 +231,6 @@ function updateRealPositions(positions) {
         return;
     }
 
-    unregisterRowsInContainer(container);
     container.innerHTML = '';
     positions.forEach((pos) => {
         const row = document.createElement('div');
@@ -277,7 +270,6 @@ function updateRealPositions(positions) {
             });
         });
 
-        registerTokenRow(pos.mint, row);
         container.appendChild(row);
     });
 }

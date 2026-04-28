@@ -60,7 +60,6 @@ const SEARCH_TIMEOUT_MS = 20000;
 
 // ── State ──
 let feedItems = new Map(); // mint -> element
-let tokenRowRegistry = new Map(); // mint -> Set of elements (Optimized lookup)
 let currentFilter = 'all';
 let feedCount = 0;
 let startTime = Date.now();
@@ -90,17 +89,10 @@ const TERM_TOOLTIPS = {
     uriScore: 'URI Score — Điểm đánh giá đường dẫn metadata.',
     dev: 'Dev — Ví deployer hoặc người tạo token.',
     deployer: 'Deployer — Ví tạo token.',
-    whiteWallet: 'White Wallet — Ví mới: tuổi < 1 giờ và ≤ 2 giao dịch (siết theo audit). Có thể tinh chỉnh qua FRESH_WALLET_MAX_AGE_SEC.',
-    cex: 'CEX — Sàn giao dịch tập trung (Binance, Bybit, OKX, Coinbase, Kraken, Kucoin, MEXC, Gate, Bitget…).',
-    cluster: 'Cluster — Nhóm ví có liên hệ nguồn vốn hoặc hành vi (sau khi đã loại CEX-shared funder).',
-    bundle: 'Bundle (co-launch) — ≥ 4 ví mua cùng slot. Khác với Jito Bundle thật (cần verify tip).',
-    jitoBundleReal: 'Jito Bundle thật — Bundle có ít nhất 1 tx chuyển SOL tới Jito tip account → searcher submit qua block-engine.',
-    peelChain: 'Peel-chain — Truy vết nguồn fund N hop. Terminus = CEX (organic) hoặc deployer (insider rất mạnh).',
-    smartMoney: 'Smart Money — Ví whitelist do user nạp (Solscan tag, Birdeye top trader…).',
-    mevBot: 'MEV/Bot — Ví có roundtrip < 5s, hoặc tx ≥ 100/giờ, hoặc trong blacklist Jito searcher.',
-    mintAuthority: 'Mint Authority — null = đã renounce (an toàn). Có giá trị = dev còn quyền mint thêm supply.',
-    freezeAuthority: 'Freeze Authority — null = đã renounce. Có giá trị = dev có thể đóng băng ATA của user (honeypot).',
-    transferFee: 'Transfer Fee — Token-2022 extension. Mỗi giao dịch user mất X% supply (honeypot tinh vi).',
+    whiteWallet: 'White Wallet — Ví mới: tuổi < 10 giờ và < 5 giao dịch (định nghĩa thống nhất).',
+    cex: 'CEX — Sàn giao dịch tập trung (Binance, OKX, v.v.).',
+    cluster: 'Cluster — Nhóm ví có liên hệ nguồn vốn hoặc hành vi.',
+    bundle: 'Bundle — Cụm lệnh/nhóm ví đi cùng nhau.',
     earlyBuyers: 'Early Buyers — Các ví mua trong những giao dịch đầu tiên của token.',
     holder: 'Holder — Ví đang nắm giữ token.',
     mint: 'Mint — Địa chỉ token trên blockchain Solana.',
@@ -205,27 +197,17 @@ const RULE_COPY = {
     sybil_protection: 'Chống Sybil',
     top10_holder_limit: `Giới hạn Top 10 ${renderTerm('Holder', 'holder')}`,
     dev_hold_limit: `${renderTerm('Dev', 'dev')} hold tối đa`,
-    bundle_limit: `${renderTerm('Bundle', 'bundle')} co-launch tối đa`,
-    jito_real_bundle_block: `${renderTerm('Jito Bundle thật', 'jitoBundleReal')} (verify tip)`,
+    bundle_limit: `${renderTerm('Bundle', 'bundle')} tối đa`,
     volume_threshold: `${renderTerm('Volume', 'volume')} tối thiểu`,
     listing_age_limit: 'Giới hạn tuổi niêm yết',
     market_cap_check: `${renderTerm('Market Cap', 'marketCap')} tối thiểu`,
-    launch_mcap_ceiling: `Trần ${renderTerm('Market Cap', 'marketCap')} lúc pass`,
-    whale_buy_concentration: 'Tổng SOL cá voi mua sớm',
-    bot_in_early_buyers: `${renderTerm('MEV/Bot', 'mevBot')} trong early buyers`,
     dev_risk_check: `${renderTerm('Risk Score', 'riskScore')} của ${renderTerm('Dev', 'dev')}`,
     token_score_check: `${renderTerm('Token Score', 'tokenScore')} tối thiểu`,
-    mint_renounce_check: `Renounce ${renderTerm('Mint Authority', 'mintAuthority')} / ${renderTerm('Freeze Authority', 'freezeAuthority')}`,
-    transfer_fee_check: `${renderTerm('Transfer Fee', 'transferFee')} (Token-2022)`,
     bonding_curve_progress: `Tiến độ ${renderTerm('Bonding Curve', 'bondingCurve')}`,
     new_wallet_accumulation: 'Tích trữ ví mới',
     first_7_buyers_hold_limit: `Tỷ trọng 7 ${renderTerm('Early Buyers', 'earlyBuyers')} đầu`,
     early_buyer_count_check: `Số lượng ${renderTerm('Early Buyers', 'earlyBuyers')}`,
     new_wallet_total_hold_limit: 'Tổng % cung của ví mới (cuối)',
-    smart_money_buy: `${renderTerm('Smart Money', 'smartMoney')} mua sớm`,
-    wash_trade_ratio: 'Tỉ lệ wash trade (unique/total)',
-    mc_drop_recent: `${renderTerm('Market Cap', 'marketCap')} giảm từ peak`,
-    dev_sold_check: `${renderTerm('Dev', 'dev')} đã xả token (rug signal)`,
     preliminary_buyers: `Kiểm tra ${renderTerm('Early Buyers', 'earlyBuyers')} sơ bộ`,
     preliminary_timeout: 'Hết thời gian theo dõi',
     analysis_error: 'Pipeline phân tích',
@@ -238,7 +220,6 @@ const RULE_PARAM_LABELS = {
     minVol: `${renderTerm('Volume', 'volume')} tối thiểu (SOL)`,
     maxMinutes: 'Tuổi tối đa (phút)',
     minMarketCapSol: `${renderTerm('MC', 'marketCap')} tối thiểu (SOL)`,
-    maxMarketCapSol: `${renderTerm('MC', 'marketCap')} tối đa (SOL)`,
     maxRiskScore: `${renderTerm('Risk Score', 'riskScore')} tối đa`,
     minScore: 'Điểm tối thiểu',
     maxProgressPercent: `${renderTerm('Bonding Curve', 'bondingCurve')} tối đa (%)`,
@@ -247,24 +228,6 @@ const RULE_PARAM_LABELS = {
     minSharedFunders: 'Số ví mẹ chung tối thiểu',
     minPercent: 'Ngưỡng tối thiểu (%)',
     minCount: `Số ${renderTerm('Early Buyers', 'earlyBuyers')} tối thiểu`,
-    // Phase 1+
-    maxTotalSol: 'Tổng SOL tối đa (whale)',
-    // Phase 2
-    maxBasisPoints: 'Transfer fee tối đa (basis points, 100bp = 1%)',
-    // Phase 5
-    maxBotCount: 'Số ví MEV/bot tối đa cho phép',
-    // Phase 6
-    minSmartMoneyCount: `${renderTerm('Smart Money', 'smartMoney')} tối thiểu`,
-    // Wallet thresholds
-    newWalletTotalHoldMaxPercent: '% cung tối đa cho ví mới (cuối)',
-    // Wash trade
-    minRatio: 'Tỉ lệ unique/total tối thiểu',
-    minTrades: 'Số trade tối thiểu để đánh giá',
-    // MC drop
-    maxDropPercent: '% giảm tối đa từ peak',
-    minPeakSol: 'Peak MC tối thiểu để áp rule (SOL)',
-    // Dev sold
-    windowMinutes: 'Window từ create để xét (phút)',
 };
 
 function getProfileCopy(profile) {
@@ -302,37 +265,6 @@ function formatNumber(num) {
     if (num >= 1_000_000) return (num / 1_000_000).toFixed(1) + 'M';
     if (num >= 1_000) return (num / 1_000).toFixed(1) + 'K';
     return num.toFixed(0);
-}
-
-// ── Row Registry Helpers ──
-function registerTokenRow(mint, element) {
-    if (!mint || !element) return;
-    if (!tokenRowRegistry.has(mint)) {
-        tokenRowRegistry.set(mint, new Set());
-    }
-    tokenRowRegistry.get(mint).add(element);
-}
-
-function unregisterTokenRow(mint, element) {
-    if (!mint || !element) return;
-    const rows = tokenRowRegistry.get(mint);
-    if (rows) {
-        rows.delete(element);
-        if (rows.size === 0) {
-            tokenRowRegistry.delete(mint);
-        }
-    }
-}
-
-function getTokenRows(mint) {
-    return tokenRowRegistry.get(mint) || [];
-}
-
-function unregisterRowsInContainer(container) {
-    if (!container) return;
-    container.querySelectorAll('[data-mint]').forEach(el => {
-        unregisterTokenRow(el.dataset.mint, el);
-    });
 }
 
 // ── Uptime Timer ──

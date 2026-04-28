@@ -37,10 +37,6 @@ class Orchestrator extends EventEmitter {
     this.tokenEarlyBuyers = new Map(); // mint -> [{ address, solAmount }]
     this.tokenData = new Map(); // mint -> token data
     this.tokenGlobalFees = new Map(); // mint -> cumulative trading fees (1% of volume)
-    // Trade history per mint cho MEV detection. Lưu cả buy & sell, giới hạn 200 trade gần nhất.
-    this.tokenTradeHistory = new Map(); // mint -> [{ trader, type, ts, signature }]
-    // Pending trades nhận trước newToken event (race condition) — replay khi tokenData arrives
-    this._pendingTrades = new Map(); // mint -> [tradeData, ...]
     this.processingTokens = new Set(); // tokens currently being analyzed
     this.passedTokens = new Set(); // tokens that successfully passed all rules
     this.analyzedTokens = new Set(); // track ALL tokens recorded to scans (pass or fail)
@@ -51,23 +47,6 @@ class Orchestrator extends EventEmitter {
     this._recheckInterval = 5000; // legacy fallback
     this._analysisQueue = [];
     this.rescanScheduler = new RescanScheduler(this);
-    // Slot pre-cache: signature → { slot, ts }. Nguồn: logsSubscribe trực tiếp PumpFun.
-    // Mục đích: bundle detection không phải gọi lại getParsedTransaction chỉ để
-    // lấy slot. Tip-account check vẫn cần parsed tx, nhưng có thể dùng slot
-    // trực tiếp để skip slot-only fetches.
-    this._slotCache = new Map();
-    this._directLogsSubId = null;
-
-    // Health metric: rolling-window count để phát hiện sớm khi pipeline mù
-    // (vd. RPC fail hàng loạt, key bị revoke). Đã từng có phiên 99.4% fail
-    // chạy âm thầm 35 phút không token nào pass — fix này tránh tái diễn.
-    this._analysisHealth = {
-      ok: 0,
-      fail: 0,
-      windowStartedAt: Date.now(),
-      lastAlertAt: 0,
-    };
-    this._analysisHealthInterval = null;
   }
 
   async _loadTokenAccountOwners(accounts) {
@@ -164,8 +143,8 @@ class Orchestrator extends EventEmitter {
     logger.info('   SCAN SOL BOT - PumpFun Sniper');
     logger.info('═══════════════════════════════════════════');
 
-    // 1. Initialize Solana connection (preflight probe — drop dead RPC trước khi vào pool)
-    await solana.init();
+    // 1. Initialize Solana connection
+    solana.init();
     if (solana.getWallet()) {
       const balance = await solana.getBalance();
       logger.info(`Wallet balance: ${formatSol(balance)}`);
@@ -297,9 +276,6 @@ class Orchestrator extends EventEmitter {
     // Start dynamic rescan scheduler (replaces static setTimeout rechecks)
     this.rescanScheduler.start();
 
-    // Start direct logs subscription (slot pre-cache)
-    this._startDirectLogsSubscription();
-
     logger.info('Bot is now running and monitoring PumpFun...');
     logger.info(`Auto-buy: ${settings.trading.autoBuyEnabled ? 'ON' : 'OFF'}`);
     logger.info(`Buy amount: ${formatSol(settings.trading.buyAmountSol)}`);
@@ -314,44 +290,6 @@ class Orchestrator extends EventEmitter {
 
     // 11. Start periodic DB cleanup (giữ DB nhỏ gọn, tránh phình > 1GB)
     this._startDbCleanup();
-
-    // 12. Start analysis-health monitor — phát hiện sớm khi RPC mù
-    this._startAnalysisHealthMonitor();
-  }
-
-  /**
-   * Mỗi 5 phút, đo tỉ lệ analysis fail. Nếu fail rate > ngưỡng và mẫu đủ lớn,
-   * gửi cảnh báo Telegram + log FATAL. Tránh tình trạng bot chạy âm thầm 30+ phút
-   * không có token nào pass do RPC issue (đã từng xảy ra: phiên 8:42-9:17 sáng nay,
-   * 99.4% fail, 0 alert).
-   */
-  _startAnalysisHealthMonitor() {
-    const intervalMs = parseInt(process.env.HEALTH_CHECK_INTERVAL_MS || '300000', 10); // 5 min
-    const failRateThreshold = parseFloat(process.env.HEALTH_FAIL_RATE_THRESHOLD || '0.5'); // 50%
-    const minSampleSize = parseInt(process.env.HEALTH_MIN_SAMPLE || '20', 10);
-    const alertCooldownMs = parseInt(process.env.HEALTH_ALERT_COOLDOWN_MS || '900000', 10); // 15 min
-
-    if (this._analysisHealthInterval) clearInterval(this._analysisHealthInterval);
-    this._analysisHealthInterval = setInterval(() => {
-      const h = this._analysisHealth;
-      const total = h.ok + h.fail;
-      const windowMin = ((Date.now() - h.windowStartedAt) / 60000).toFixed(1);
-
-      if (total >= minSampleSize) {
-        const failRate = h.fail / total;
-        if (failRate >= failRateThreshold && (Date.now() - h.lastAlertAt) > alertCooldownMs) {
-          h.lastAlertAt = Date.now();
-          const msg = `🚨 <b>BOT MÙ</b> — analysis fail rate ${(failRate * 100).toFixed(1)}% (${h.fail}/${total}) trong ${windowMin} phút.\nKhả năng cao do RPC: kiểm tra Helius key + .env.`;
-          logger.fatal(msg.replace(/<[^>]+>/g, ''));
-          telegram.sendMessage(msg).catch(e => logger.error(`Health alert telegram failed: ${e.message}`));
-        } else {
-          logger.info(`📊 Analysis health (${windowMin}m): ok=${h.ok} fail=${h.fail} (${(failRate * 100).toFixed(1)}% fail)`);
-        }
-      }
-
-      // Reset window
-      this._analysisHealth = { ok: 0, fail: 0, windowStartedAt: Date.now(), lastAlertAt: h.lastAlertAt };
-    }, intervalMs);
   }
 
   _startDbCleanup() {
@@ -470,21 +408,6 @@ class Orchestrator extends EventEmitter {
     // Subscribe to trades for this token
     detector.subscribeToToken(mint);
 
-    // Replay pending trades đã đến trước newToken event (race condition fix)
-    const pending = this._pendingTrades.get(mint);
-    if (pending && pending.length > 0) {
-      logger.info(`🔄 Replay ${pending.length} pending trade(s) for ${tokenData.symbol} (race-condition fix)`);
-      this._pendingTrades.delete(mint);
-      // Defer để tokenEarlyBuyers Map đã được set xong
-      setImmediate(() => {
-        for (const tradeData of pending) {
-          try { this._onTrade(tradeData); } catch (err) {
-            logger.debug(`Replay trade error: ${err.message}`);
-          }
-        }
-      });
-    }
-
     // Record to database for persistence
     tracker.recordDetectedToken({
       mint,
@@ -495,17 +418,13 @@ class Orchestrator extends EventEmitter {
 
     logger.info(`New token: ${tokenData.symbol} | Deployer: ${shortenAddress(tokenData.deployer)} | MCap: ${tokenData.marketCapSol?.toFixed(2)} SOL`);
 
-    // If deployer made an initial buy, add as first early buyer and trigger analysis.
-    // CẦN signature để _detectBundleWallets resolve được slot create — nếu không deployer
-    // không bao giờ được tính vào bundle slot dù thật sự nằm trong slot create.
+    // If deployer made an initial buy, add as first early buyer and trigger analysis
     if (tokenData.solAmount > 0) {
       this.tokenEarlyBuyers.get(mint).push({
         address: tokenData.deployer,
         solAmount: tokenData.solAmount || 0,
         tokenAmount: tokenData.tokenAmount || 0,
         timestamp: Date.now(),
-        signature: tokenData.signature || null,
-        slot: null, // sẽ resolve từ _slotCache hoặc getParsedTransaction
       });
       logger.info(`👤 Buyer #1/${settings.monitoring.earlyBuyersToMonitor} for ${tokenData.symbol}: ${shortenAddress(tokenData.deployer)} (${(tokenData.solAmount || 0).toFixed(4)} SOL) [deployer initial buy]`);
 
@@ -568,41 +487,9 @@ class Orchestrator extends EventEmitter {
       return;
     }
 
-    // Track early buyers — nếu token chưa được track (race: trade tới TRƯỚC newToken event),
-    // queue trade lại để replay khi `_onNewToken` xảy ra. Tránh mất các trade đầu tiên
-    // (đặc biệt quan trọng cho bundle detection trong slot create).
+    // Track early buyers — skip if token not tracked (trade arrived before create event or untracked token)
     const earlyBuyers = this.tokenEarlyBuyers.get(mint);
-    if (!earlyBuyers) {
-      // Chỉ queue nếu mint chưa từng được analyzed (tránh keep trade của token đã clean up)
-      if (!this.analyzedTokens.has(mint)) {
-        let pending = this._pendingTrades.get(mint);
-        if (!pending) {
-          pending = [];
-          this._pendingTrades.set(mint, pending);
-          // Auto-cleanup sau 60s nếu newToken không bao giờ tới
-          setTimeout(() => this._pendingTrades.delete(mint), 60000).unref?.();
-        }
-        if (pending.length < 30) pending.push(tradeData);
-      }
-      return;
-    }
-
-    // Trade history per mint — phục vụ MEV roundtrip detection.
-    // Lưu CẢ buy & sell, giới hạn 200 entry gần nhất để tránh phình memory.
-    if (tradeData.trader && tradeData.txType) {
-      let hist = this.tokenTradeHistory.get(mint);
-      if (!hist) {
-        hist = [];
-        this.tokenTradeHistory.set(mint, hist);
-      }
-      hist.push({
-        trader: tradeData.trader,
-        type: tradeData.txType, // 'buy' | 'sell'
-        ts: tradeData.timestamp || Date.now(),
-        signature: tradeData.signature || null,
-      });
-      if (hist.length > 200) hist.splice(0, hist.length - 200);
-    }
+    if (!earlyBuyers) return;
 
     if (tradeData.txType === 'buy' && earlyBuyers.length < settings.monitoring.earlyBuyersToMonitor) {
       // Clear safety-net timeout since a real buyer arrived
@@ -650,21 +537,6 @@ class Orchestrator extends EventEmitter {
       token.vTokensInBondingCurve = tradeData.vTokensInBondingCurve;
       token.marketCapSol = tradeData.newMarketCapSol;
       token.globalFee = this.tokenGlobalFees.get(mint);
-
-      // Track peak MC để mc_drop_recent rule biết khi token đang dump
-      const newMc = Number(tradeData.newMarketCapSol) || 0;
-      if (newMc > 0 && (!token.peakMarketCapSol || newMc > token.peakMarketCapSol)) {
-        token.peakMarketCapSol = newMc;
-        token.peakMarketCapAt = tradeData.timestamp || Date.now();
-      }
-
-      // Flag devSold nếu deployer xả token (sớm nhất của rug)
-      if (tradeData.txType === 'sell' && tradeData.trader && tradeData.trader === token.deployer && !token.devSold) {
-        token.devSold = true;
-        token.devSoldAt = tradeData.timestamp || Date.now();
-        token.devSoldAmount = tradeData.tokenAmount || 0;
-        logger.warn(`🚨 DEV SOLD: ${token.symbol} (${shortenAddress(mint)}) — deployer xả ${(tradeData.solAmount || 0).toFixed(3)} SOL`);
-      }
 
       // Emit live price update to dashboard (throttled: only if token is being tracked)
       if (this.processingTokens.has(mint) || this.passedTokens.has(mint)) {
@@ -719,21 +591,11 @@ class Orchestrator extends EventEmitter {
    * Fetch token supply and top holders from RPC
    * Excludes PumpFun system wallets (bonding curve, migration authority) from holder calculation
    */
-  async _fetchTokenHolders(mint, deployer, earlyBuyerWallets = [], bundleWallets = new Set(), tokenTimestamp = Date.now(), jitoBundleWallets = new Set(), currentMarketCapSol = null) {
+  async _fetchTokenHolders(mint, deployer, earlyBuyerWallets = [], bundleWallets = new Set(), tokenTimestamp = Date.now()) {
     try {
-      // Adaptive cache TTL: ngắn (2s) khi MC sát ngưỡng pass — tránh false-pass do
-      // cache cũ; bình thường (8s) để giảm RPC trong rescan.
-      const cfg = settings.holderCache || {};
-      const baseTtl = cfg.ttlMs ?? 8000;
-      const nearTtl = cfg.nearThresholdTtlMs ?? 2000;
-      const nearPct = cfg.nearThresholdPct ?? 0.10;
-      const minMc = settings.rules?.minMarketCapSol || 0;
-      const maxMc = settings.rules?.maxMarketCapSol || Infinity;
-      const isNearThreshold = currentMarketCapSol != null && minMc > 0 && (
-        Math.abs(currentMarketCapSol - minMc) / minMc <= nearPct ||
-        (Number.isFinite(maxMc) && Math.abs(currentMarketCapSol - maxMc) / maxMc <= nearPct)
-      );
-      const cacheTtlMs = isNearThreshold ? nearTtl : baseTtl;
+      // Cache TTL configurable. Mặc định 8s (giảm từ 20s) — tránh false-pass do cache cũ
+      // ngay sát ngưỡng MCap. Có thể chỉnh qua HOLDER_CACHE_TTL_MS env.
+      const cacheTtlMs = settings.holderCache?.ttlMs ?? 8000;
       const cached = this.holderStatsCache.get(mint);
       if (cached && Date.now() - cached.timestamp < cacheTtlMs) {
         return cached.data;
@@ -752,12 +614,18 @@ class Orchestrator extends EventEmitter {
         PUMP_PROGRAM
       );
 
-      // Exclude bonding/system/burn owners and the token accounts they control from holder concentration.
-      // Sử dụng module config/holder-exclusions làm nguồn duy nhất → dễ maintain.
-      const { EXCLUDED_OWNERS, isBurnOwner } = require('../config/holder-exclusions');
+      // Exclude bonding/system owners and the token accounts they control from holder concentration.
+      // We compare at both owner-level and token-account-level because largest accounts returns token accounts.
       const excludedOwners = new Set([
         bondingCurvePDA.toBase58(),
-        ...EXCLUDED_OWNERS,
+        '39azUYFWPz3VHgKCf3VChUwbpURdCHRxjWVowf5jUJjg', // PumpFun migration authority
+        'CebN5WGQ4jvEPvsVU4EoHEpgzq1VV7AbCJ2j6BgsF66z', // PumpFun fee account
+        'Ce6TQqeHC9p8KetsN6JsjHK7UTZk7nasjjnr7XxXp9F1', // PumpFun fee account 2
+        'CebN5WGZ4jvStp3MLuW6S6T4Ez7B4PmezeNVasJp69ov', // Legacy/alt migration authority seen in prior code
+        'TSLvddqTZ24pYp3zXW728EKEpCKA8atuVnJkz78S79z', // Legacy global fee account seen in prior code
+        '5Q544fKrMJu97H5G98M5QXT7sAUPtUvyP5D9S6gBfGnd', // Raydium authority (if migrated)
+        '4e6eTeeM9ojnT2D1297q6NngaMgChA3mZTXdRvs5xPz7', // Additional PumpFun system wallet
+        '6pjkAgzWJvqxVbwwumU1gin5pDyDdM2eaNXKTv3B7NPN', // Additional PumpFun system wallet
       ]);
       const excludedTokenAccounts = new Set();
 
@@ -777,53 +645,16 @@ class Orchestrator extends EventEmitter {
         excludedTokenAccounts.add(ata2022.toBase58());
       } catch (e) { /* ignore */ }
 
-      // Fetch largest accounts, token supply, và mint info (authority + extensions) song song
-      const [largestAccounts, tokenSupplyResult, mintAccountInfo] = await Promise.all([
+      // Fetch largest accounts and actual token supply in parallel
+      const [largestAccounts, tokenSupplyResult] = await Promise.all([
         solana.execute(conn => conn.getTokenLargestAccounts(pubkey), RPC_CATEGORY.METADATA),
         solana.execute(conn => conn.getTokenSupply(pubkey), RPC_CATEGORY.METADATA),
-        solana.execute(conn => conn.getParsedAccountInfo(pubkey), RPC_CATEGORY.METADATA),
       ]);
-
-      // Trích xuất mint authority / freeze authority / transferFee extension (Token-2022)
-      const mintInfo = (() => {
-        const out = {
-          mintAuthority: null,
-          freezeAuthority: null,
-          transferFeeBasisPoints: 0,
-          isToken2022: false,
-        };
-        try {
-          const v = mintAccountInfo?.value;
-          if (!v?.data?.parsed?.info) return out;
-          const programOwner = v.owner?.toBase58?.() || String(v.owner || '');
-          out.isToken2022 = programOwner === 'TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb';
-          const info = v.data.parsed.info;
-          out.mintAuthority = info.mintAuthority || null;
-          out.freezeAuthority = info.freezeAuthority || null;
-          if (out.isToken2022 && Array.isArray(info.extensions)) {
-            const tfe = info.extensions.find(e => e.extension === 'transferFeeConfig');
-            if (tfe) {
-              const bp = tfe?.state?.newerTransferFee?.transferFeeBasisPoints
-                ?? tfe?.state?.olderTransferFee?.transferFeeBasisPoints
-                ?? 0;
-              out.transferFeeBasisPoints = parseInt(bp, 10) || 0;
-            }
-          }
-        } catch (err) {
-          logger.debug(`Failed to parse mint info for ${shortenAddress(mint)}: ${err.message}`);
-        }
-        return out;
-      })();
 
       const allAccounts = largestAccounts.value;
       if (!allAccounts || allAccounts.length === 0) {
         logger.debug(`No token accounts found for ${shortenAddress(mint)}`);
         return null;
-      }
-      // Solana RPC `getTokenLargestAccounts` cap ở 20. Nếu token có > 20 holder thật,
-      // các metric concentration/bundle có thể bỏ sót. Log warn để user biết.
-      if (allAccounts.length >= 20) {
-        logger.debug(`⚠️ ${shortenAddress(mint)}: getTokenLargestAccounts trả 20 records (cap) — có thể bỏ sót holder ngoài top 20.`);
       }
 
       // === Get ACTUAL decimals and supply from on-chain data ===
@@ -850,19 +681,11 @@ class Orchestrator extends EventEmitter {
 
       const filterRealHolderAccounts = (accounts) => {
         let filteredBondingCurveBalance = 0;
-        let burnedAmount = 0;
         let filteredFunctionalCount = 0;
         const filteredAccounts = accounts.filter((acc) => {
-          const isBurn = isBurnOwner(acc.owner);
           const isKnownSystem =
             excludedTokenAccounts.has(acc.addr) ||
             this._isLikelyFunctionalOwner(acc.owner, excludedOwners);
-
-          if (isBurn) {
-            burnedAmount += acc.amount;
-            filteredFunctionalCount++;
-            return false;
-          }
 
           if (isKnownSystem) {
             filteredBondingCurveBalance += acc.amount;
@@ -876,7 +699,6 @@ class Orchestrator extends EventEmitter {
         return {
           filteredAccounts,
           filteredBondingCurveBalance,
-          burnedAmount,
           filteredFunctionalCount,
         };
       };
@@ -884,22 +706,19 @@ class Orchestrator extends EventEmitter {
       // === Always compute full stats (bundle/early/dev %) — with 16 RPCs we have enough throughput
       // that the old age<60s fast-path was causing retryable rules to fail forever on fresh tokens.
 
-      // === Separate bonding/system/burn from holder accounts ===
+      // === Separate bonding/system from holder accounts ===
       // Program-controlled / PDA-controlled wallets are not shown as real holders.
-      // Burn (1nc1...) là token đã đốt → loại khỏi cả tử số VÀ mẫu số.
       let axiomRouteAddress = bondingCurvePDA.toBase58();
       const {
         filteredAccounts: filteredParsedAccounts,
         filteredBondingCurveBalance: bondingCurveBalance,
-        burnedAmount,
         filteredFunctionalCount,
       } = filterRealHolderAccounts(parsedTokenAccounts);
 
-      // Circulating supply = total - bonding curve - burned. Đây là mẫu số CHUẨN
-      // để tính % concentration (không phải total supply).
-      const circulatingSupply = Math.max(0.0001, supply - bondingCurveBalance - burnedAmount);
+      // Circulating supply = total supply - bonding curve/system holdings
+      const circulatingSupply = Math.max(0.0001, supply - bondingCurveBalance);
 
-      logger.debug(`Holder stats for ${shortenAddress(mint)}: decimals=${tokenDecimals}, supply=${supply.toFixed(0)}, bondingCurve=${bondingCurveBalance.toFixed(0)}, burned=${burnedAmount.toFixed(0)}, circulating=${circulatingSupply.toFixed(0)}`);
+      logger.debug(`Holder stats for ${shortenAddress(mint)}: decimals=${tokenDecimals}, supply=${supply.toFixed(0)}, bondingCurve=${bondingCurveBalance.toFixed(0)}, circulating=${circulatingSupply.toFixed(0)}`);
 
       // === Sanity check: circulatingSupply must be positive and reasonable ===
       if (circulatingSupply <= 0) {
@@ -910,7 +729,6 @@ class Orchestrator extends EventEmitter {
 
           top10OwnersPercent: 0,
           bundleHoldPercent: 0,
-          jitoBundleHoldPercent: 0,
           earlyBuyerHoldPercent: 0,
           devHoldPercent: 0,
           circulatingSupply: 0,
@@ -924,17 +742,13 @@ class Orchestrator extends EventEmitter {
         return invalid;
       }
 
-      // % concentration mẫu số = circulatingSupply (đã trừ bonding-curve và burned).
-      // Đây là semantics CHUẨN — token đang lưu hành thật. % so với total supply
-      // (gồm cả bonding-curve) sẽ underestimate khi token còn ở phase early.
+      // Axiom style: exclude LP/bonding curve from holder LIST, but % is against TOTAL supply.
       const sortedAccounts = [...filteredParsedAccounts].sort((a, b) => b.amount - a.amount);
       const top10 = sortedAccounts.slice(0, 10);
       const top10Total = top10.reduce((sum, acc) => sum + acc.amount, 0);
-      const top10Percent = circulatingSupply > 0 ? (top10Total / circulatingSupply) * 100 : 0;
-      // Legacy metric — % so với total supply (giữ cho UI/debug, KHÔNG dùng trong rule)
-      const top10TotalSupplyPercent = supply > 0 ? (top10Total / supply) * 100 : 0;
+      const top10Percent = supply > 0 ? (top10Total / supply) * 100 : 0;
 
-      // Owner-level concentration (gộp các ATA cùng owner) — dùng làm metric phụ.
+      // Keep owner-level concentration as an internal secondary metric for deeper analysis.
       const ownerBalances = new Map();
       for (const acc of filteredParsedAccounts) {
         const ownerKey = acc.owner || acc.addr;
@@ -944,10 +758,9 @@ class Orchestrator extends EventEmitter {
         .sort((a, b) => b - a)
         .slice(0, 10)
         .reduce((sum, amount) => sum + amount, 0);
-      const top10OwnersPercent = circulatingSupply > 0 ? (top10OwnersTotal / circulatingSupply) * 100 : 0;
-      const top10OwnersTotalSupplyPercent = supply > 0 ? (top10OwnersTotal / supply) * 100 : 0;
+      const top10OwnersPercent = supply > 0 ? (top10OwnersTotal / supply) * 100 : 0;
 
-      // Sanity check: top10 over circulating should never exceed 100% materially.
+      // Sanity check: top10 over total supply should never exceed 100% materially.
       if (top10Percent > 100.5) {
         logger.warn(`⚠️ Invalid holder data for ${shortenAddress(mint)} — top10=${top10Percent.toFixed(1)}% of total supply, top10Total=${top10Total.toFixed(0)}, supply=${supply.toFixed(0)}.`);
         const invalid = {
@@ -955,7 +768,6 @@ class Orchestrator extends EventEmitter {
           top10Percent: 0,
           top10OwnersPercent: 0,
           bundleHoldPercent: 0,
-          jitoBundleHoldPercent: 0,
           earlyBuyerHoldPercent: 0,
           devHoldPercent: 0,
           circulatingSupply,
@@ -972,7 +784,6 @@ class Orchestrator extends EventEmitter {
       // === Early buyer hold percent — current holdings of tracked early buyers ===
       let earlyBuyerHoldPercent = 0;
       let bundleHoldPercent = 0;
-      let jitoBundleHoldPercent = 0;
       if (earlyBuyerWallets.length > 0) {
         const allAccountMap = new Map();
         for (const acc of parsedTokenAccounts) {
@@ -981,7 +792,6 @@ class Orchestrator extends EventEmitter {
 
         let earlyBuyerTotal = 0;
         let bundleTotal = 0;
-        let jitoBundleTotal = 0;
         for (const w of earlyBuyerWallets) {
           try {
             const walletPubkey = new PublicKey(w.address);
@@ -998,19 +808,14 @@ class Orchestrator extends EventEmitter {
                   if (bundleWallets.has(w.address)) {
                     bundleTotal += balance;
                   }
-                  if (jitoBundleWallets.has(w.address)) {
-                    jitoBundleTotal += balance;
-                  }
                   break;
                 }
               } catch (e) { /* ignore */ }
             }
           } catch (e) { /* skip invalid address */ }
         }
-        // Mẫu số = circulatingSupply (đã trừ bonding-curve + burned)
-        earlyBuyerHoldPercent = Math.min((earlyBuyerTotal / circulatingSupply) * 100, 100);
-        bundleHoldPercent = Math.min((bundleTotal / circulatingSupply) * 100, 100);
-        jitoBundleHoldPercent = Math.min((jitoBundleTotal / circulatingSupply) * 100, 100);
+        earlyBuyerHoldPercent = Math.min((earlyBuyerTotal / supply) * 100, 100);
+        bundleHoldPercent = Math.min((bundleTotal / supply) * 100, 100);
       }
 
       // === Dev hold percent — derive deployer's ATA ===
@@ -1037,7 +842,7 @@ class Orchestrator extends EventEmitter {
           return devATAs.has(acc.addr);
         });
         if (devAccount) {
-          devHoldPercent = Math.min((devAccount.amount / circulatingSupply) * 100, 100);
+          devHoldPercent = Math.min((devAccount.amount / supply) * 100, 100);
         }
       } catch (e) {
         logger.debug(`Could not derive dev ATA for ${shortenAddress(deployer)}: ${e.message}`);
@@ -1046,19 +851,14 @@ class Orchestrator extends EventEmitter {
       const result = {
         supply,
         top10Percent,
-        top10TotalSupplyPercent,
-        top10CirculatingPercent: top10Percent, // alias: % giờ là circulating-based
+        top10CirculatingPercent: circulatingSupply > 0 ? (top10Total / circulatingSupply) * 100 : 0,
         top10OwnersPercent,
-        top10OwnersTotalSupplyPercent,
-        top10OwnersCirculatingPercent: top10OwnersPercent,
+        top10OwnersCirculatingPercent: circulatingSupply > 0 ? (top10OwnersTotal / circulatingSupply) * 100 : 0,
         bundleHoldPercent,
-        jitoBundleHoldPercent,
         earlyBuyerHoldPercent,
         devHoldPercent,
         circulatingSupply,
         bondingCurveBalance,
-        burnedAmount,
-        mintInfo,
         realHolderCount: filteredParsedAccounts.length,
         filteredFunctionalCount,
         axiomRouteAddress,
@@ -1068,11 +868,9 @@ class Orchestrator extends EventEmitter {
           return {
             address: addr,
             owner: ownerAddr,
-            // % của holder cá nhân — dùng circulating làm mẫu số cho thống nhất
-            percent: Math.min((t.amount / circulatingSupply) * 100, 100),
+            percent: Math.min((t.amount / supply) * 100, 100),
             isDev: ownerAddr === deployer || addr === deployer,
             isBundle: bundleWallets ? (bundleWallets.has(ownerAddr) || bundleWallets.has(addr)) : false,
-            isJitoBundle: jitoBundleWallets ? (jitoBundleWallets.has(ownerAddr) || jitoBundleWallets.has(addr)) : false,
           };
         }),
       };
@@ -1091,111 +889,57 @@ class Orchestrator extends EventEmitter {
   }
 
   /**
-   * Subscribe trực tiếp logs PumpFun program → pre-cache (signature, slot).
-   * Mục đích: giảm RPC `getParsedTransaction` chỉ-để-lấy-slot trong bundle detect.
-   * Commitment 'processed' → ~400ms latency. Dùng connection trong category DETECTION.
-   */
-  _startDirectLogsSubscription() {
-    const cfg = settings.directLogs || {};
-    if (cfg.enabled === false) {
-      logger.info('Direct logs subscription disabled (DIRECT_LOGS_ENABLED=false)');
-      return;
-    }
-    try {
-      const conn = solana.getCategoryConnection(RPC_CATEGORY.DETECTION);
-      if (!conn) {
-        logger.warn('Direct logs: không có DETECTION connection');
-        return;
-      }
-      const PUMP_PROGRAM = new PublicKey(settings.pumpfun.programId);
-      const commitment = cfg.commitment || 'processed';
-
-      this._directLogsSubId = conn.onLogs(
-        PUMP_PROGRAM,
-        (logs, ctx) => {
-          if (!logs?.signature || !ctx?.slot) return;
-          this._slotCache.set(logs.signature, { slot: ctx.slot, ts: Date.now() });
-        },
-        commitment,
-      );
-      logger.info(`📡 Direct logs subscribed (PumpFun, ${commitment}) — slot pre-cache active`);
-
-      // GC slotCache mỗi 60s
-      const ttl = cfg.cacheTtlMs ?? (5 * 60 * 1000);
-      this._slotCacheGcTimer = setInterval(() => {
-        const cutoff = Date.now() - ttl;
-        for (const [sig, entry] of this._slotCache.entries()) {
-          if (entry.ts < cutoff) this._slotCache.delete(sig);
-        }
-      }, 60 * 1000);
-      this._slotCacheGcTimer.unref?.();
-    } catch (err) {
-      logger.warn(`Direct logs subscription failed: ${err.message}`);
-    }
-  }
-
-  /**
-   * Two-tier bundle detection:
-   *   coLaunchWallets    = same-slot ≥ 4 ví (loose — có thể là sniper bot ngẫu nhiên)
-   *   jitoBundleWallets  = subset có ít nhất 1 tx trong slot đó chuyển SOL tới Jito tip
-   *                        account → đây là Jito Bundle THẬT do searcher submit
-   *
-   * Tách 2 metric vì same-slot ≥ 4 KHÔNG đồng nghĩa với Jito Bundle (4 sniper bot
-   * khác nhau trùng slot là chuyện thường). Rule downstream nên dùng jitoBundle...
-   * cho ngưỡng siết, dùng coLaunch... cho ngưỡng lỏng.
+   * Axiom-style bundle detection:
+   * 1. Flag slot as bundle if >= 4 wallets buy in the same block
+   * 2. Pattern filter: if a wallet's NEXT trade after the bundle is NOT also a bundle, discard it
+   *    (Axiom: "If a wallet makes a buy as part of a detected bundle but its next transaction
+   *     is not part of a bundle, it is disregarded from detection")
    */
   async _detectBundleWallets(earlyBuyerTrades) {
-    const empty = { coLaunchWallets: new Set(), jitoBundleWallets: new Set() };
-    if (!earlyBuyerTrades || earlyBuyerTrades.length < 4) return empty;
+    if (!earlyBuyerTrades || earlyBuyerTrades.length < 4) return new Set();
 
-    const { hasJitoTipTransfer } = require('../config/jito.constants');
-
-    // Step 1: Resolve slot + parsed tx (để check tip Jito) cho từng trade.
-    // Slot có thể đã pre-cache từ direct logsSubscribe → tiết kiệm RPC.
-    const tradesWithMeta = await Promise.all(earlyBuyerTrades.map(async (trade) => {
-      if (!trade.signature) return { ...trade, slot: trade.slot || null, parsed: null };
-      const cachedSlot = this._slotCache.get(trade.signature)?.slot;
+    // Step 1: Resolve slots for all trades
+    const tradesWithSlot = await Promise.all(earlyBuyerTrades.map(async (trade) => {
+      if (trade.slot) return trade;
+      if (!trade.signature) return { ...trade, slot: null };
       try {
         const parsed = await solana.executeRace(conn =>
           conn.getParsedTransaction(trade.signature, { maxSupportedTransactionVersion: 0 })
         );
-        return {
-          ...trade,
-          slot: trade.slot || parsed?.slot || cachedSlot || null,
-          parsed,
-        };
+        return { ...trade, slot: parsed?.slot || null };
       } catch (err) {
-        logger.debug(`Failed to fetch tx for ${trade.signature}: ${err.message}`);
-        // Fallback: dùng slot từ cache nếu có (parsed = null → không check được tip)
-        return { ...trade, slot: trade.slot || cachedSlot || null, parsed: null };
+        logger.debug(`Failed to fetch slot for ${trade.signature}: ${err.message}`);
+        return { ...trade, slot: null };
       }
     }));
 
-    // Step 2: Build slot → traders map, identify co-launch slots (>= 4 ví)
+    // Step 2: Build slot → traders map, identify bundle slots (>= 4 wallets)
     const slotMap = new Map();
-    for (const trade of tradesWithMeta) {
+    for (const trade of tradesWithSlot) {
       if (!trade.slot || !trade.trader) continue;
       if (!slotMap.has(trade.slot)) slotMap.set(trade.slot, []);
       slotMap.get(trade.slot).push(trade);
     }
 
-    const coLaunchSlots = new Set();
-    const jitoConfirmedSlots = new Set();
+    const bundleSlots = new Set();
     for (const [slot, trades] of slotMap.entries()) {
       const uniqueTraders = new Set(trades.map(t => t.trader));
-      if (uniqueTraders.size < 4) continue;
-      coLaunchSlots.add(slot);
-      // Slot trở thành "jito-confirmed" nếu BẤT KỲ tx nào trong slot có tip
-      if (trades.some(t => hasJitoTipTransfer(t.parsed))) {
-        jitoConfirmedSlots.add(slot);
+      if (uniqueTraders.size >= 4) bundleSlots.add(slot);
+    }
+
+    if (bundleSlots.size === 0) return new Set();
+
+    // Step 3: Collect bundle candidates (wallets in any bundle slot)
+    const bundleCandidates = new Set();
+    for (const slot of bundleSlots) {
+      for (const trade of slotMap.get(slot)) {
+        bundleCandidates.add(trade.trader);
       }
     }
 
-    if (coLaunchSlots.size === 0) return empty;
-
-    // Step 3: Pattern filter — build per-trader trade list sorted by slot
+    // Step 4: Pattern filter — build per-trader trade list sorted by slot
     const traderTrades = new Map();
-    for (const trade of tradesWithMeta) {
+    for (const trade of tradesWithSlot) {
       if (!trade.trader || !trade.slot) continue;
       if (!traderTrades.has(trade.trader)) traderTrades.set(trade.trader, []);
       traderTrades.get(trade.trader).push(trade);
@@ -1204,34 +948,29 @@ class Orchestrator extends EventEmitter {
       trades.sort((a, b) => (a.slot || 0) - (b.slot || 0));
     }
 
-    const passesPatternFilter = (trader, slotSet) => {
+    // Step 5: Apply pattern filter
+    const bundleWallets = new Set();
+    for (const trader of bundleCandidates) {
       const trades = traderTrades.get(trader) || [];
-      const idx = trades.findIndex(t => slotSet.has(t.slot));
-      if (idx === -1) return false;
-      const nextTrade = trades[idx + 1];
-      if (!nextTrade) return true; // không có data tiếp → giữ (conservative)
-      return slotSet.has(nextTrade.slot); // next trade cũng phải trong bundle slot
-    };
 
-    const coLaunchCandidates = new Set();
-    for (const slot of coLaunchSlots) {
-      for (const t of slotMap.get(slot)) coLaunchCandidates.add(t.trader);
-    }
+      // Find this trader's first bundle trade
+      const bundleTradeIdx = trades.findIndex(t => bundleSlots.has(t.slot));
+      if (bundleTradeIdx === -1) continue;
 
-    const coLaunchWallets = new Set();
-    const jitoBundleWallets = new Set();
-    for (const trader of coLaunchCandidates) {
-      if (!passesPatternFilter(trader, coLaunchSlots)) continue;
-      coLaunchWallets.add(trader);
-      // Ví thuộc slot jito-confirmed → vào jitoBundleWallets
-      const trades = traderTrades.get(trader) || [];
-      if (trades.some(t => jitoConfirmedSlots.has(t.slot))) {
-        jitoBundleWallets.add(trader);
+      // Check if there's a next trade after the bundle
+      const nextTrade = trades[bundleTradeIdx + 1];
+      if (!nextTrade) {
+        // No subsequent trade in our data → cannot confirm pattern → keep (conservative)
+        bundleWallets.add(trader);
+      } else if (bundleSlots.has(nextTrade.slot)) {
+        // Next trade is also in a bundle slot → confirmed consistent bundler
+        bundleWallets.add(trader);
       }
+      // else: next trade is NOT a bundle → pattern filter removes this wallet
     }
 
-    logger.debug(`Bundle detection: ${coLaunchCandidates.size} co-launch candidates → ${coLaunchWallets.size} after filter (${coLaunchSlots.size} slots) | ${jitoBundleWallets.size} jito-confirmed (${jitoConfirmedSlots.size} slots)`);
-    return { coLaunchWallets, jitoBundleWallets };
+    logger.debug(`Bundle detection: ${bundleCandidates.size} candidates → ${bundleWallets.size} confirmed after pattern filter (${bundleSlots.size} bundle slots)`);
+    return bundleWallets;
   }
 
   /**
@@ -1331,22 +1070,17 @@ class Orchestrator extends EventEmitter {
 
       // === PARALLEL ANALYSIS: Run independent RPC calls concurrently ===
       // Cache dev analysis to avoid redundant RPC calls on re-scans
-      const [devAnalysis, buyerAnalyses, bundleDetect] = await Promise.all([
+      const [devAnalysis, buyerAnalyses, bundleWallets] = await Promise.all([
         // 1. Dev analysis (2-3 RPC calls) - ~2s, cached after first run
         tokenData._devAnalysis || devAnalyzer.analyzeDeployer(tokenData.deployer).then(result => {
           tokenData._devAnalysis = result; // Cache for subsequent re-scans
           return result;
         }),
         // 2. Wallet analysis (parallel batches) - ~12s
-        // Pass deployer để peel-chain trace dừng khi gặp deployer (insider signal)
-        walletAnalyzer.analyzeEarlyBuyers(buyerAddresses, tokenData.deployer),
-        // 3. Bundle wallet detection — trả 2 set: coLaunch (same-slot) và jitoBundle (có tip)
+        walletAnalyzer.analyzeEarlyBuyers(buyerAddresses),
+        // 3. Bundle wallet detection based on same-slot buys (Axiom-style approximation)
         this._detectBundleWallets(earlyBuyerTrades),
       ]);
-      const coLaunchWallets = bundleDetect?.coLaunchWallets || new Set();
-      const jitoBundleWallets = bundleDetect?.jitoBundleWallets || new Set();
-      // Backwards-compat: bundleWallets = coLaunchWallets (rule cũ vẫn xài tên này)
-      const bundleWallets = coLaunchWallets;
 
       // Merge trade amounts into buyerAnalyses so the frontend can display them accurately
       if (buyerAnalyses && earlyBuyerTrades) {
@@ -1365,9 +1099,7 @@ class Orchestrator extends EventEmitter {
         tokenData.deployer,
         earlyBuyers,
         bundleWallets,
-        tokenData.timestamp,
-        jitoBundleWallets,
-        tokenData.marketCapSol
+        tokenData.timestamp
       );
       // Only accept the canonical Pump bonding-curve PDA from holder analysis.
       if (
@@ -1384,17 +1116,9 @@ class Orchestrator extends EventEmitter {
       // 6. Cluster detection (uses cached wallet data from step 3, no extra RPC)
       const clusterAnalysis = walletAnalyzer.detectClusterFromCache(buyerAddresses);
 
-      // 6b. MEV / bot detection: kết hợp trade history (roundtrip) + heuristic + blacklist.
-      const botDetector = require('../analyzers/bot-detector');
-      const { mevWallets, reasons: mevReasons } = botDetector.detectBots({
-        tradeHistory: this.tokenTradeHistory.get(mint) || [],
-        earlyBuyerAnalyses: buyerAnalyses,
-      });
-
-      // 7. Calculate bonding curve progress (dynamic threshold qua env, default 85 SOL)
-      const migrateThreshold = settings.pumpfun?.migrateThresholdSol || 85;
+      // 7. Calculate bonding curve progress
       let bondingCurveProgress = tokenData.vSolInBondingCurve
-        ? (tokenData.vSolInBondingCurve / migrateThreshold) * 100
+        ? (tokenData.vSolInBondingCurve / 85) * 100 // PumpFun migrates at ~85 SOL
         : 0;
 
       // === Synchronize Market Cap calculation with Migration Check ===
@@ -1442,11 +1166,6 @@ class Orchestrator extends EventEmitter {
         bondingCurveProgress,
         holderStats,
         bundleWallets,
-        coLaunchWallets,
-        jitoBundleWallets,
-        mevWallets,
-        mevReasons,
-        tokenTradeHistory: this.tokenTradeHistory.get(mint) || [],
         settings,
       });
 
@@ -1457,28 +1176,6 @@ class Orchestrator extends EventEmitter {
         logger.info(`  ${icon} [${r.ruleType}] ${r.ruleName}: ${r.reason}`);
       }
       logger.info(`  → ${ruleResult.summary}`);
-
-      // Analysis chạy được tới rule engine = thành công ở tầng pipeline
-      this._analysisHealth.ok++;
-
-      // Fast alert: dashboard-only preview tại buyer #1 nếu các rule critical (mint
-      // renounce, transfer fee, dev risk, mcap) đều pass. Không telegram, không
-      // auto-buy — chỉ giảm latency cho user thấy "candidate" sớm hơn 5-15s.
-      const fastAlertCfg = settings.fastAlert || {};
-      if (fastAlertCfg.enabled && buyers.length === 1 && !tokenData._fastAlertSent) {
-        const fastRuleIds = new Set(fastAlertCfg.rules || []);
-        const fastResults = ruleResult.results.filter(r => fastRuleIds.has(r.ruleId));
-        const fastPassed = fastResults.length > 0 && fastResults.every(r => r.passed);
-        if (fastPassed) {
-          tokenData._fastAlertSent = true;
-          webServer.emit('fastSignal', {
-            tokenData: { ...tokenData, analysisTimestamp: Date.now() },
-            fastResults,
-            buyerCount: buyers.length,
-            note: 'Critical rules pass tại buyer #1 — chờ full analysis confirm',
-          });
-        }
-      }
 
       // Emit to real-time dashboard (comprehensive data for professional view)
       // Preserve original token timestamp for accurate age display
@@ -1629,7 +1326,6 @@ class Orchestrator extends EventEmitter {
         }
       }
     } catch (err) {
-      this._analysisHealth.fail++;
       logger.error(`Full analysis failed for ${shortenAddress(mint)}: ${err.message}`);
       // Persist the error to DB so the token is never silently lost
       try {
@@ -1888,7 +1584,6 @@ class Orchestrator extends EventEmitter {
         this.tokenData.delete(mint);
         this.tokenEarlyBuyers.delete(mint);
         this.tokenGlobalFees.delete(mint);
-        this.tokenTradeHistory.delete(mint);
         this.holderStatsCache.delete(mint);
         this._rescanAttempts.delete(mint);
       }
@@ -2561,7 +2256,6 @@ class Orchestrator extends EventEmitter {
         this.tokenData.delete(mint);
         this.tokenEarlyBuyers.delete(mint);
         this.tokenGlobalFees.delete(mint);
-        this.tokenTradeHistory.delete(mint);
         this.passedTokens.delete(mint);
         this.analyzedTokens.delete(mint);
         this.processingTokens.delete(mint);
@@ -2577,10 +2271,6 @@ class Orchestrator extends EventEmitter {
    */
   async stop() {
     logger.info('Shutting down...');
-    if (this._analysisHealthInterval) {
-      clearInterval(this._analysisHealthInterval);
-      this._analysisHealthInterval = null;
-    }
     detector.stop();
     telegram.stop();
     tracker.close();

@@ -35,58 +35,22 @@ class SolanaConnection {
     this._minSpacingMs = parseInt(process.env.RPC_MIN_SPACING_MS || '50', 10);
   }
 
-  async init() {
-    // Pre-flight: probe each RPC, drop dead ones BEFORE adding to pool.
-    // Tránh tình huống bot chạy âm thầm với key bị revoke (401 Invalid API key)
-    // hoặc endpoint timeout — đã từng làm 99.4% phân tích fail trong 1 phiên.
-    const skipPreflight = process.env.RPC_SKIP_PREFLIGHT === 'true';
-    const probeTimeoutMs = parseInt(process.env.RPC_PROBE_TIMEOUT_MS || '4000', 10);
-
-    const probe = async (url) => {
+  init() {
+    for (const url of settings.rpcUrls) {
       const conn = new Connection(url, {
         commitment: 'confirmed',
         wsEndpoint: settings.wsUrl,
         disableRetryOnRateLimit: true,
       });
-      if (skipPreflight) return { url, conn, ok: true, reason: 'preflight skipped' };
-      try {
-        await Promise.race([
-          conn.getSlot(),
-          new Promise((_, r) => setTimeout(() => r(new Error(`probe timeout ${probeTimeoutMs}ms`)), probeTimeoutMs)),
-        ]);
-        return { url, conn, ok: true };
-      } catch (err) {
-        const msg = String(err?.message || err);
-        const m401 = msg.includes('401') || msg.toLowerCase().includes('invalid api key');
-        return { url, conn, ok: false, reason: m401 ? '401 Invalid API key' : msg.split('\n')[0] };
-      }
-    };
-
-    const results = await Promise.all(settings.rpcUrls.map(probe));
-    for (const r of results) {
-      if (r.ok) {
-        this.connections.push(r.conn);
-        this._endpointStats.push({
-          inFlight: 0,
-          lastRequestTime: 0,
-          errorCount: 0,
-          lastErrorTime: 0,
-          cooldownUntil: 0,
-        });
-        logger.info(`RPC #${this.connections.length}: ${this._safeUrl(r.url)}${r.reason ? ` (${r.reason})` : ''}`);
-      } else {
-        logger.warn(`⚠️ RPC dead at startup, skipped: ${this._safeUrl(r.url)} — ${r.reason}`);
-      }
-    }
-
-    if (this.connections.length === 0) {
-      throw new Error(
-        `No healthy RPC endpoints. Tất cả ${settings.rpcUrls.length} endpoint đều fail preflight. ` +
-        `Kiểm tra SOLANA_RPC_URLS trong .env (Helius key revoke / mạng).`
-      );
-    }
-    if (this.connections.length < settings.rpcUrls.length) {
-      logger.warn(`⚠️ RPC pool degraded: ${this.connections.length}/${settings.rpcUrls.length} healthy. Pass rate sẽ giảm.`);
+      this.connections.push(conn);
+      this._endpointStats.push({
+        inFlight: 0,
+        lastRequestTime: 0,
+        errorCount: 0,
+        lastErrorTime: 0,
+        cooldownUntil: 0,
+      });
+      logger.info(`RPC #${this.connections.length}: ${url.substring(0, 50)}...`);
     }
 
     // Tự động phân bổ nếu số lượng RPC khác 4
@@ -321,22 +285,9 @@ class SolanaConnection {
       stats.cooldownUntil = Date.now() + 3600000;
     } else if (errMsg.includes('429')) {
       stats.cooldownUntil = Date.now() + 2000; // Nghỉ 2s nếu bị rate limit
-    } else if (errMsg.includes('401') || errMsg.toLowerCase().includes('invalid api key')) {
-      // Key bị revoke — cooldown dài (1 giờ) để không spam log
-      logger.error(`🔴 RPC #${idx + 1} INVALID API KEY (401). Tạm dừng 1 giờ — kiểm tra .env / Helius dashboard.`);
-      stats.cooldownUntil = Date.now() + 3600000;
     } else {
       stats.cooldownUntil = Date.now() + 1000;
     }
-  }
-
-  // Mask api-key trong URL để không lộ key trong log/error message.
-  // "https://mainnet.helius-rpc.com/?api-key=03172b21-..." → "helius-rpc.com/?api-key=03172b**"
-  _safeUrl(url) {
-    if (!url) return '';
-    return String(url)
-      .replace(/api-key=([a-zA-Z0-9-_]{6})[a-zA-Z0-9-_]*/g, 'api-key=$1***')
-      .substring(0, 60) + '...';
   }
 
   async _withTimeout(promise, ms, name) {
@@ -377,16 +328,6 @@ class SolanaConnection {
   getWallet() { return this.wallet; }
   getPublicKey() { return this.wallet?.publicKey; }
   getExecutionConnection() { return this.executionConnection || this.connections[0]; }
-
-  /**
-   * Lấy connection ưu tiên theo category — dùng cho subscribe (WS), không qua failover.
-   * Phục vụ logsSubscribe / accountSubscribe.
-   */
-  getCategoryConnection(category = RPC_CATEGORY.DETECTION) {
-    const indices = this._categoryIndices[category] || this._categoryIndices[RPC_CATEGORY.GENERAL];
-    const idx = (indices && indices[0] != null) ? indices[0] : 0;
-    return this.connections[idx];
-  }
 
   getStats() {
     const now = Date.now();

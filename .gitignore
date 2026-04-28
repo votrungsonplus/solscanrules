@@ -43,3 +43,9 @@ devscan/
 backup2/
 backup2.1/
 src_faulty_backup/
+
+# Backup env files (chứa private key — TUYỆT ĐỐI không commit)
+.env.bak*
+.env.*.bak*
+.env.backup
+.env.audit.bak
