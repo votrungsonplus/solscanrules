@@ -21,12 +21,16 @@ class PumpFunDetector extends EventEmitter {
     const primaryUrl = settings.pumpfun.wsUrl;
     this._openStream('primary', primaryUrl);
 
-    if (settings.pumpfun.wsUrl) {
-      this._openStream('shadow', primaryUrl);
+    // Shadow stream chỉ là redundancy THẬT khi URL khác (env PUMPFUN_WS_URL_SHADOW).
+    // Nếu user không cấu hình → không mở stream giả cùng URL (chỉ tốn tài nguyên).
+    const shadowUrl = settings.pumpfun.wsUrlShadow;
+    if (shadowUrl && shadowUrl !== primaryUrl) {
+      this._openStream('shadow', shadowUrl);
+      logger.info(`PumpFun detector: shadow stream khác nguồn (${shadowUrl.substring(0, 40)}...)`);
     }
 
     this._startDedupeCleanup();
-    logger.info(`PumpFun detector started (${this.streams.length} parallel WS streams with dedupe)`);
+    logger.info(`PumpFun detector started (${this.streams.length} WS stream${this.streams.length > 1 ? 's' : ''} with dedupe)`);
   }
 
   stop() {

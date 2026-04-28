@@ -39,6 +39,8 @@ class Orchestrator extends EventEmitter {
     this.tokenGlobalFees = new Map(); // mint -> cumulative trading fees (1% of volume)
     // Trade history per mint cho MEV detection. Lưu cả buy & sell, giới hạn 200 trade gần nhất.
     this.tokenTradeHistory = new Map(); // mint -> [{ trader, type, ts, signature }]
+    // Pending trades nhận trước newToken event (race condition) — replay khi tokenData arrives
+    this._pendingTrades = new Map(); // mint -> [tradeData, ...]
     this.processingTokens = new Set(); // tokens currently being analyzed
     this.passedTokens = new Set(); // tokens that successfully passed all rules
     this.analyzedTokens = new Set(); // track ALL tokens recorded to scans (pass or fail)
@@ -419,6 +421,21 @@ class Orchestrator extends EventEmitter {
     // Subscribe to trades for this token
     detector.subscribeToToken(mint);
 
+    // Replay pending trades đã đến trước newToken event (race condition fix)
+    const pending = this._pendingTrades.get(mint);
+    if (pending && pending.length > 0) {
+      logger.info(`🔄 Replay ${pending.length} pending trade(s) for ${tokenData.symbol} (race-condition fix)`);
+      this._pendingTrades.delete(mint);
+      // Defer để tokenEarlyBuyers Map đã được set xong
+      setImmediate(() => {
+        for (const tradeData of pending) {
+          try { this._onTrade(tradeData); } catch (err) {
+            logger.debug(`Replay trade error: ${err.message}`);
+          }
+        }
+      });
+    }
+
     // Record to database for persistence
     tracker.recordDetectedToken({
       mint,
@@ -429,13 +446,17 @@ class Orchestrator extends EventEmitter {
 
     logger.info(`New token: ${tokenData.symbol} | Deployer: ${shortenAddress(tokenData.deployer)} | MCap: ${tokenData.marketCapSol?.toFixed(2)} SOL`);
 
-    // If deployer made an initial buy, add as first early buyer and trigger analysis
+    // If deployer made an initial buy, add as first early buyer and trigger analysis.
+    // CẦN signature để _detectBundleWallets resolve được slot create — nếu không deployer
+    // không bao giờ được tính vào bundle slot dù thật sự nằm trong slot create.
     if (tokenData.solAmount > 0) {
       this.tokenEarlyBuyers.get(mint).push({
         address: tokenData.deployer,
         solAmount: tokenData.solAmount || 0,
         tokenAmount: tokenData.tokenAmount || 0,
         timestamp: Date.now(),
+        signature: tokenData.signature || null,
+        slot: null, // sẽ resolve từ _slotCache hoặc getParsedTransaction
       });
       logger.info(`👤 Buyer #1/${settings.monitoring.earlyBuyersToMonitor} for ${tokenData.symbol}: ${shortenAddress(tokenData.deployer)} (${(tokenData.solAmount || 0).toFixed(4)} SOL) [deployer initial buy]`);
 
@@ -498,9 +519,24 @@ class Orchestrator extends EventEmitter {
       return;
     }
 
-    // Track early buyers — skip if token not tracked (trade arrived before create event or untracked token)
+    // Track early buyers — nếu token chưa được track (race: trade tới TRƯỚC newToken event),
+    // queue trade lại để replay khi `_onNewToken` xảy ra. Tránh mất các trade đầu tiên
+    // (đặc biệt quan trọng cho bundle detection trong slot create).
     const earlyBuyers = this.tokenEarlyBuyers.get(mint);
-    if (!earlyBuyers) return;
+    if (!earlyBuyers) {
+      // Chỉ queue nếu mint chưa từng được analyzed (tránh keep trade của token đã clean up)
+      if (!this.analyzedTokens.has(mint)) {
+        let pending = this._pendingTrades.get(mint);
+        if (!pending) {
+          pending = [];
+          this._pendingTrades.set(mint, pending);
+          // Auto-cleanup sau 60s nếu newToken không bao giờ tới
+          setTimeout(() => this._pendingTrades.delete(mint), 60000).unref?.();
+        }
+        if (pending.length < 30) pending.push(tradeData);
+      }
+      return;
+    }
 
     // Trade history per mint — phục vụ MEV roundtrip detection.
     // Lưu CẢ buy & sell, giới hạn 200 entry gần nhất để tránh phình memory.
@@ -565,6 +601,21 @@ class Orchestrator extends EventEmitter {
       token.vTokensInBondingCurve = tradeData.vTokensInBondingCurve;
       token.marketCapSol = tradeData.newMarketCapSol;
       token.globalFee = this.tokenGlobalFees.get(mint);
+
+      // Track peak MC để mc_drop_recent rule biết khi token đang dump
+      const newMc = Number(tradeData.newMarketCapSol) || 0;
+      if (newMc > 0 && (!token.peakMarketCapSol || newMc > token.peakMarketCapSol)) {
+        token.peakMarketCapSol = newMc;
+        token.peakMarketCapAt = tradeData.timestamp || Date.now();
+      }
+
+      // Flag devSold nếu deployer xả token (sớm nhất của rug)
+      if (tradeData.txType === 'sell' && tradeData.trader && tradeData.trader === token.deployer && !token.devSold) {
+        token.devSold = true;
+        token.devSoldAt = tradeData.timestamp || Date.now();
+        token.devSoldAmount = tradeData.tokenAmount || 0;
+        logger.warn(`🚨 DEV SOLD: ${token.symbol} (${shortenAddress(mint)}) — deployer xả ${(tradeData.solAmount || 0).toFixed(3)} SOL`);
+      }
 
       // Emit live price update to dashboard (throttled: only if token is being tracked)
       if (this.processingTokens.has(mint) || this.passedTokens.has(mint)) {
@@ -719,6 +770,11 @@ class Orchestrator extends EventEmitter {
       if (!allAccounts || allAccounts.length === 0) {
         logger.debug(`No token accounts found for ${shortenAddress(mint)}`);
         return null;
+      }
+      // Solana RPC `getTokenLargestAccounts` cap ở 20. Nếu token có > 20 holder thật,
+      // các metric concentration/bundle có thể bỏ sót. Log warn để user biết.
+      if (allAccounts.length >= 20) {
+        logger.debug(`⚠️ ${shortenAddress(mint)}: getTokenLargestAccounts trả 20 records (cap) — có thể bỏ sót holder ngoài top 20.`);
       }
 
       // === Get ACTUAL decimals and supply from on-chain data ===
@@ -1286,9 +1342,10 @@ class Orchestrator extends EventEmitter {
         earlyBuyerAnalyses: buyerAnalyses,
       });
 
-      // 7. Calculate bonding curve progress
+      // 7. Calculate bonding curve progress (dynamic threshold qua env, default 85 SOL)
+      const migrateThreshold = settings.pumpfun?.migrateThresholdSol || 85;
       let bondingCurveProgress = tokenData.vSolInBondingCurve
-        ? (tokenData.vSolInBondingCurve / 85) * 100 // PumpFun migrates at ~85 SOL
+        ? (tokenData.vSolInBondingCurve / migrateThreshold) * 100
         : 0;
 
       // === Synchronize Market Cap calculation with Migration Check ===
@@ -1340,6 +1397,7 @@ class Orchestrator extends EventEmitter {
         jitoBundleWallets,
         mevWallets,
         mevReasons,
+        tokenTradeHistory: this.tokenTradeHistory.get(mint) || [],
         settings,
       });
 
