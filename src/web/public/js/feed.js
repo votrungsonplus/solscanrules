@@ -232,6 +232,46 @@ socket.on('newToken', (token) => {
     addTokenToFeed(token);
 });
 
+// Fast signal — server emit khi token mới có buyer #1 và critical rules pass
+// (mint_renounce, transfer_fee, dev_risk, launch_mcap_ceiling, market_cap_check).
+// Hiển thị badge ⚡ FAST trên feed item + inline notice trên analysis panel nếu đang xem.
+socket.on('fastSignal', (data) => {
+    const mint = data?.tokenData?.mint;
+    if (!mint) return;
+
+    const item = feedItems.get(mint);
+    if (item && !item.querySelector('.feed-fast-badge')) {
+        const symbolEl = item.querySelector('.symbol');
+        if (symbolEl) {
+            const fast = document.createElement('span');
+            fast.className = 'feed-fast-badge';
+            fast.title = data.note || 'Critical rules pass tại buyer #1 — chờ full analysis confirm';
+            fast.textContent = '⚡ FAST';
+            fast.style.cssText = 'margin-left:6px;padding:1px 6px;border-radius:4px;background:rgba(255,200,0,0.2);color:#ffc800;font-size:9px;font-weight:700;letter-spacing:0.5px';
+            symbolEl.appendChild(fast);
+        }
+    }
+
+    // Nếu user đang xem token này trong analysis panel, show một notice nhỏ
+    if (selectedMint === mint && liveAnalysis) {
+        let notice = liveAnalysis.querySelector('.fast-signal-notice');
+        if (!notice) {
+            notice = document.createElement('div');
+            notice.className = 'fast-signal-notice';
+            notice.style.cssText = 'background:rgba(255,200,0,0.1);border:1px solid rgba(255,200,0,0.4);border-radius:8px;padding:10px 14px;margin:12px 0;color:#ffc800;font-size:12px;font-weight:600;display:flex;align-items:center;gap:8px';
+            const card = liveAnalysis.querySelector('.detail-card.analysis-report');
+            if (card) {
+                card.insertBefore(notice, card.firstChild);
+            } else {
+                liveAnalysis.prepend(notice);
+            }
+        }
+        const sym = data.tokenData?.symbol || '???';
+        const passedCount = (data.fastResults || []).filter(r => r.passed).length;
+        notice.innerHTML = `⚡ <span>Tín hiệu nhanh: <strong>${escapeHtml(sym)}</strong> đã pass ${passedCount} critical rules tại buyer #${data.buyerCount || 1}. Phân tích đầy đủ đang chạy…</span>`;
+    }
+});
+
 socket.on('tokenPriceUpdate', (data) => {
     const { mint, marketCapSol, marketCapUsd, globalFee } = data;
     const priceUsd = parseFloat(document.getElementById('solPrice')?.textContent?.replace('$', '') || 150);

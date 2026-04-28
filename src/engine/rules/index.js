@@ -24,6 +24,9 @@ const newWalletTotalHoldLimitRule = require('./buyers/new-wallet-total-hold-limi
 const launchMcapCeilingRule = require('./market/launch-mcap-ceiling.rule');
 const whaleBuyConcentrationRule = require('./buyers/whale-buy-concentration.rule');
 const botInEarlyBuyersRule = require('./buyers/bot-in-early-buyers.rule');
+const washTradeRatioRule = require('./market/wash-trade-ratio.rule');
+const mcDropRecentRule = require('./market/mc-drop-recent.rule');
+const devSoldCheckRule = require('./quality/dev-sold-check.rule');
 
 function buildDefaultRules() {
   return [
@@ -44,6 +47,9 @@ function buildDefaultRules() {
     launchMcapCeilingRule(), // mới: chặn pass khi MCap đã quá đỉnh
     whaleBuyConcentrationRule(), // mới: chặn whale dump risk
     botInEarlyBuyersRule(),      // mới: ALERT nếu MEV/bot trong early buyers
+    washTradeRatioRule(),        // mới: chặn wash trade (uniqueBuyers/totalTrades)
+    mcDropRecentRule(),          // mới: chặn nếu MC giảm > 30% từ peak
+    devSoldCheckRule(),          // mới: chặn ngay nếu deployer xả token
     devRiskCheckRule(),
     tokenScoreCheckRule(),
     mintRenounceCheckRule(),

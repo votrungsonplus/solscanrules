@@ -28,6 +28,10 @@ const settings = {
   pumpfun: {
     programId: process.env.PUMPFUN_PROGRAM_ID || '6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P',
     wsUrl: process.env.PUMPFUN_WS_URL || 'wss://pumpportal.fun/api/data',
+    // Redundancy thật: shadow URL khác nguồn (vd Helius enhanced WS) tránh single point of failure
+    wsUrlShadow: process.env.PUMPFUN_WS_URL_SHADOW || '',
+    // Bonding curve migration threshold (SOL) — PumpFun đôi khi tinh chỉnh; cho phép env override
+    migrateThresholdSol: parseFloat(process.env.PUMPFUN_MIGRATE_SOL_THRESHOLD || '85'),
   },
 
   // Trading
@@ -49,7 +53,8 @@ const settings = {
 
   // Monitoring
   monitoring: {
-    earlyBuyersToMonitor: parseInt(process.env.EARLY_BUYERS_TO_MONITOR || '10'),
+    // Tăng từ 10 → 20 để bắt được bundle có > 10 ví. Vẫn cap ở 20 để giới hạn RPC.
+    earlyBuyersToMonitor: parseInt(process.env.EARLY_BUYERS_TO_MONITOR || '20'),
     minBuyersToPass: parseInt(process.env.MIN_BUYERS_TO_PASS || '5'),
     // Dùng chung nguồn với rules.minGlobalFee — tránh phân mảnh
     globalFeeThreshold: parseFloat(process.env.RULE_MIN_GLOBAL_FEE || process.env.GLOBAL_FEE_THRESHOLD || '0.3'),
