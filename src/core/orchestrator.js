@@ -57,6 +57,17 @@ class Orchestrator extends EventEmitter {
     // trực tiếp để skip slot-only fetches.
     this._slotCache = new Map();
     this._directLogsSubId = null;
+
+    // Health metric: rolling-window count để phát hiện sớm khi pipeline mù
+    // (vd. RPC fail hàng loạt, key bị revoke). Đã từng có phiên 99.4% fail
+    // chạy âm thầm 35 phút không token nào pass — fix này tránh tái diễn.
+    this._analysisHealth = {
+      ok: 0,
+      fail: 0,
+      windowStartedAt: Date.now(),
+      lastAlertAt: 0,
+    };
+    this._analysisHealthInterval = null;
   }
 
   async _loadTokenAccountOwners(accounts) {
@@ -153,8 +164,8 @@ class Orchestrator extends EventEmitter {
     logger.info('   SCAN SOL BOT - PumpFun Sniper');
     logger.info('═══════════════════════════════════════════');
 
-    // 1. Initialize Solana connection
-    solana.init();
+    // 1. Initialize Solana connection (preflight probe — drop dead RPC trước khi vào pool)
+    await solana.init();
     if (solana.getWallet()) {
       const balance = await solana.getBalance();
       logger.info(`Wallet balance: ${formatSol(balance)}`);
@@ -303,6 +314,44 @@ class Orchestrator extends EventEmitter {
 
     // 11. Start periodic DB cleanup (giữ DB nhỏ gọn, tránh phình > 1GB)
     this._startDbCleanup();
+
+    // 12. Start analysis-health monitor — phát hiện sớm khi RPC mù
+    this._startAnalysisHealthMonitor();
+  }
+
+  /**
+   * Mỗi 5 phút, đo tỉ lệ analysis fail. Nếu fail rate > ngưỡng và mẫu đủ lớn,
+   * gửi cảnh báo Telegram + log FATAL. Tránh tình trạng bot chạy âm thầm 30+ phút
+   * không có token nào pass do RPC issue (đã từng xảy ra: phiên 8:42-9:17 sáng nay,
+   * 99.4% fail, 0 alert).
+   */
+  _startAnalysisHealthMonitor() {
+    const intervalMs = parseInt(process.env.HEALTH_CHECK_INTERVAL_MS || '300000', 10); // 5 min
+    const failRateThreshold = parseFloat(process.env.HEALTH_FAIL_RATE_THRESHOLD || '0.5'); // 50%
+    const minSampleSize = parseInt(process.env.HEALTH_MIN_SAMPLE || '20', 10);
+    const alertCooldownMs = parseInt(process.env.HEALTH_ALERT_COOLDOWN_MS || '900000', 10); // 15 min
+
+    if (this._analysisHealthInterval) clearInterval(this._analysisHealthInterval);
+    this._analysisHealthInterval = setInterval(() => {
+      const h = this._analysisHealth;
+      const total = h.ok + h.fail;
+      const windowMin = ((Date.now() - h.windowStartedAt) / 60000).toFixed(1);
+
+      if (total >= minSampleSize) {
+        const failRate = h.fail / total;
+        if (failRate >= failRateThreshold && (Date.now() - h.lastAlertAt) > alertCooldownMs) {
+          h.lastAlertAt = Date.now();
+          const msg = `🚨 <b>BOT MÙ</b> — analysis fail rate ${(failRate * 100).toFixed(1)}% (${h.fail}/${total}) trong ${windowMin} phút.\nKhả năng cao do RPC: kiểm tra Helius key + .env.`;
+          logger.fatal(msg.replace(/<[^>]+>/g, ''));
+          telegram.sendMessage(msg).catch(e => logger.error(`Health alert telegram failed: ${e.message}`));
+        } else {
+          logger.info(`📊 Analysis health (${windowMin}m): ok=${h.ok} fail=${h.fail} (${(failRate * 100).toFixed(1)}% fail)`);
+        }
+      }
+
+      // Reset window
+      this._analysisHealth = { ok: 0, fail: 0, windowStartedAt: Date.now(), lastAlertAt: h.lastAlertAt };
+    }, intervalMs);
   }
 
   _startDbCleanup() {
@@ -1409,6 +1458,9 @@ class Orchestrator extends EventEmitter {
       }
       logger.info(`  → ${ruleResult.summary}`);
 
+      // Analysis chạy được tới rule engine = thành công ở tầng pipeline
+      this._analysisHealth.ok++;
+
       // Fast alert: dashboard-only preview tại buyer #1 nếu các rule critical (mint
       // renounce, transfer fee, dev risk, mcap) đều pass. Không telegram, không
       // auto-buy — chỉ giảm latency cho user thấy "candidate" sớm hơn 5-15s.
@@ -1577,6 +1629,7 @@ class Orchestrator extends EventEmitter {
         }
       }
     } catch (err) {
+      this._analysisHealth.fail++;
       logger.error(`Full analysis failed for ${shortenAddress(mint)}: ${err.message}`);
       // Persist the error to DB so the token is never silently lost
       try {
@@ -2524,6 +2577,10 @@ class Orchestrator extends EventEmitter {
    */
   async stop() {
     logger.info('Shutting down...');
+    if (this._analysisHealthInterval) {
+      clearInterval(this._analysisHealthInterval);
+      this._analysisHealthInterval = null;
+    }
     detector.stop();
     telegram.stop();
     tracker.close();
