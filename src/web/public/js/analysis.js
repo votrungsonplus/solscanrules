@@ -694,40 +694,90 @@ function renderAnalysis(data) {
             </div>
         `;
 
-        const t10Color = safeNumber(holderStats?.top10Percent, 0) > 30 ? 'red' : safeNumber(holderStats?.top10Percent, 0) > 20 ? 'yellow' : 'green';
-        const devColor = safeNumber(holderStats?.devHoldPercent, 0) > 20 ? 'red' : safeNumber(holderStats?.devHoldPercent, 0) > 10 ? 'yellow' : 'green';
-        const bundleColor = safeNumber(holderStats?.bundleHoldPercent, 0) > 20 ? 'red' : 'green';
-        const earlyBuyerColor = safeNumber(holderStats?.earlyBuyerHoldPercent, 0) > 20 ? 'red' : 'green';
+        // Ngưỡng tone color align với rule defaults (mẫu số = circulatingSupply, không phải total).
+        // Top10: 50% (rule), Dev: 30%, Bundle co-launch: 10%, Jito Bundle thật: 5%, Early buyer: 25%.
+        const top10Pct = safeNumber(holderStats?.top10Percent, 0);
+        const devPct = safeNumber(holderStats?.devHoldPercent, 0);
+        const bundlePct = safeNumber(holderStats?.bundleHoldPercent, 0);
+        const jitoBundlePct = safeNumber(holderStats?.jitoBundleHoldPercent, 0);
+        const earlyPct = safeNumber(holderStats?.earlyBuyerHoldPercent, 0);
+        const t10Color = top10Pct > 50 ? 'red' : top10Pct > 35 ? 'yellow' : 'green';
+        const devColor = devPct > 30 ? 'red' : devPct > 15 ? 'yellow' : 'green';
+        const bundleColor = bundlePct > 10 ? 'red' : bundlePct > 5 ? 'yellow' : 'green';
+        const jitoBundleColor = jitoBundlePct > 5 ? 'red' : jitoBundlePct > 0 ? 'yellow' : 'green';
+        const earlyBuyerColor = earlyPct > 25 ? 'red' : earlyPct > 15 ? 'yellow' : 'green';
+
+        const mintInfo = holderStats?.mintInfo || {};
+        const mintAuthSet = !!mintInfo.mintAuthority;
+        const freezeAuthSet = !!mintInfo.freezeAuthority;
+        const transferFeeBp = safeNumber(mintInfo.transferFeeBasisPoints, 0);
+        const isToken2022 = !!mintInfo.isToken2022;
+
+        const burnedAmount = safeNumber(holderStats?.burnedAmount, 0);
+        const burnedPct = holderStats?.supply > 0 ? (burnedAmount / holderStats.supply) * 100 : 0;
+        const supplyTotalPct = safeNumber(holderStats?.top10TotalSupplyPercent, 0);
 
         html += `
             <div class="info-card">
-                <h4><i class="fas fa-chart-pie"></i> Phân bổ ${renderTerm('Holder', 'holder')}</h4>
+                <h4><i class="fas fa-chart-pie"></i> Phân bổ ${renderTerm('Holder', 'holder')} <span class="info-card-meta">% so với cung lưu hành</span></h4>
                 ${holderStats
                     ? buildInfoRows([
                         {
                             label: `${renderTerm('Holder', 'holder')} thực`,
-                            value: `${holderStats.realHolderCount ?? 0}${typeof holderStats.filteredFunctionalCount === 'number' ? ` | Loc ${holderStats.filteredFunctionalCount}` : ''}`,
+                            value: `${holderStats.realHolderCount ?? 0}${typeof holderStats.filteredFunctionalCount === 'number' ? ` | Lọc ${holderStats.filteredFunctionalCount}` : ''}`,
                         },
                         {
-                            label: 'Top 10',
-                            value: `${safeNumber(holderStats.top10Percent, 0).toFixed(1)}%${typeof holderStats.top10OwnersPercent === 'number' ? ` | Ví sở hữu ${holderStats.top10OwnersPercent.toFixed(1)}%` : ''}`,
+                            label: 'Top 10 (lưu hành)',
+                            html: `${top10Pct.toFixed(1)}%${supplyTotalPct > 0 ? ` <span class="muted">| ${supplyTotalPct.toFixed(1)}% cung tổng</span>` : ''}${typeof holderStats.top10OwnersPercent === 'number' ? ` <span class="muted">| Owners ${holderStats.top10OwnersPercent.toFixed(1)}%</span>` : ''}`,
                             tone: t10Color,
                         },
                         {
                             label: renderTerm('Dev', 'dev'),
-                            value: `${safeNumber(holderStats.devHoldPercent, 0).toFixed(1)}%`,
+                            value: `${devPct.toFixed(1)}%`,
                             tone: devColor,
                         },
                         {
-                            label: renderTerm('Bundle', 'bundle'),
-                            value: `${safeNumber(holderStats.bundleHoldPercent, 0).toFixed(1)}%`,
+                            label: `${renderTerm('Bundle', 'bundle')} (co-launch)`,
+                            value: `${bundlePct.toFixed(1)}%`,
                             tone: bundleColor,
                         },
                         {
+                            label: renderTerm('Jito Bundle thật', 'jitoBundleReal'),
+                            value: jitoBundlePct > 0 ? `${jitoBundlePct.toFixed(1)}% 🚨` : '0% (không tip)',
+                            tone: jitoBundleColor,
+                        },
+                        {
                             label: renderTerm('Early Buyers', 'earlyBuyers'),
-                            value: `${safeNumber(holderStats.earlyBuyerHoldPercent, 0).toFixed(1)}%`,
+                            value: `${earlyPct.toFixed(1)}%`,
                             tone: earlyBuyerColor,
                         },
+                        burnedAmount > 0 ? {
+                            label: 'Đã đốt (burn)',
+                            value: `${burnedPct.toFixed(2)}% cung tổng`,
+                            tone: 'green',
+                        } : null,
+                        // Mint authority / freeze authority — quan trọng cho honeypot detect
+                        mintInfo && (mintAuthSet || mintAuthSet === false) ? {
+                            label: renderTerm('Mint Authority', 'mintAuthority'),
+                            value: mintAuthSet
+                                ? `❌ Chưa renounce (${escapeHtml(mintInfo.mintAuthority).slice(0, 8)}…)`
+                                : '✓ Đã renounce',
+                            tone: mintAuthSet ? 'red' : 'green',
+                        } : null,
+                        mintInfo && (freezeAuthSet || freezeAuthSet === false) ? {
+                            label: renderTerm('Freeze Authority', 'freezeAuthority'),
+                            value: freezeAuthSet
+                                ? `❌ Chưa renounce (${escapeHtml(mintInfo.freezeAuthority).slice(0, 8)}…)`
+                                : '✓ Đã renounce',
+                            tone: freezeAuthSet ? 'red' : 'green',
+                        } : null,
+                        isToken2022 ? {
+                            label: renderTerm('Transfer Fee', 'transferFee'),
+                            value: transferFeeBp > 0
+                                ? `🚨 ${(transferFeeBp / 100).toFixed(2)}% (Token-2022)`
+                                : '0% (Token-2022, an toàn)',
+                            tone: transferFeeBp > 0 ? 'red' : 'green',
+                        } : null,
                     ])
                     : '<div class="info-empty">Chưa có dữ liệu holder.</div>'}
             </div>
@@ -737,6 +787,8 @@ function renderAnalysis(data) {
         const clusterTone = clusterRisk === 'HIGH' ? 'red' : clusterRisk === 'MEDIUM' ? 'yellow' : 'green';
         const sharedFunders = Array.isArray(clusterAnalysis?.sharedFunders) ? clusterAnalysis.sharedFunders : [];
         const sharedCount = sharedFunders.length;
+        const insiderPeelCount = safeNumber(clusterAnalysis?.insiderPeelCount, 0);
+        const sharedPeelTermini = Array.isArray(clusterAnalysis?.sharedPeelTermini) ? clusterAnalysis.sharedPeelTermini : [];
 
         html += `
             <div class="info-card">
@@ -746,8 +798,10 @@ function renderAnalysis(data) {
                         ${buildInfoRows([
                             {
                                 label: 'Tín hiệu thắng',
-                                value: sharedCount >= 3 ? 'MẠNH (x5+)' : 'CẦN THEO DÕI',
-                                tone: sharedCount >= 3 ? 'green' : 'yellow',
+                                value: insiderPeelCount > 0
+                                    ? `🚨 INSIDER (peel-chain → deployer)`
+                                    : sharedCount >= 3 ? 'MẠNH (x5+)' : 'CẦN THEO DÕI',
+                                tone: insiderPeelCount > 0 ? 'red' : (sharedCount >= 3 ? 'green' : 'yellow'),
                             },
                             {
                                 label: `Có ${renderTerm('Cluster', 'cluster')}`,
@@ -760,9 +814,20 @@ function renderAnalysis(data) {
                                 tone: clusterTone,
                             },
                             {
-                                label: 'Ví mẹ chung',
+                                label: 'Ví mẹ chung (non-CEX)',
                                 value: sharedCount,
+                                tone: sharedCount > 0 ? 'yellow' : '',
                             },
+                            {
+                                label: renderTerm('Peel-chain', 'peelChain') + ' → deployer',
+                                value: insiderPeelCount > 0 ? `🚨 ${insiderPeelCount} ví` : '0 ví',
+                                tone: insiderPeelCount > 0 ? 'red' : 'green',
+                            },
+                            sharedPeelTermini.length > 0 ? {
+                                label: renderTerm('Peel-chain', 'peelChain') + ' shared terminus',
+                                value: `${sharedPeelTermini.length} điểm hội tụ`,
+                                tone: 'yellow',
+                            } : null,
                             {
                                 label: 'Ví mới trong cluster',
                                 value: `${clusterAnalysis.freshNewWalletCount || 0}/${clusterAnalysis.walletCount || 0}`,
@@ -770,19 +835,35 @@ function renderAnalysis(data) {
                         ])}
                         ${sharedFunders.length > 0 ? `
                             <div class="sub-list">
-                                <div class="sub-list-title">Ví mẹ chung</div>
+                                <div class="sub-list-title">Ví mẹ chung (đã loại CEX)</div>
                                 ${sharedFunders.slice(0, 5).map((funder) => {
                                     const addr = typeof funder === 'string' ? funder : (funder.address || funder.wallet || '');
-                                    const count = typeof funder === 'object' ? (funder.count || funder.fundedCount || '') : '';
+                                    const count = typeof funder === 'object' ? (funder.sharedBy || funder.count || funder.fundedCount || '') : '';
                                     if (!addr) return '';
                                     return `
                                         <div class="sub-list-row">
                                             <a href="https://solscan.io/account/${encodeURIComponent(addr)}" target="_blank" rel="noreferrer" class="mono-link">${escapeHtml(addr)}</a>
-                                            ${count ? `<span>${count} ví</span>` : ''}
+                                            ${count ? `<span>${count} ví con</span>` : ''}
                                         </div>
                                     `;
                                 }).join('')}
                                 ${sharedFunders.length > 5 ? `<div class="sub-list-more">... và ${sharedFunders.length - 5} ví mẹ khác</div>` : ''}
+                            </div>
+                        ` : ''}
+                        ${sharedPeelTermini.length > 0 ? `
+                            <div class="sub-list">
+                                <div class="sub-list-title">Peel-chain shared terminus (insider qua nhiều hop)</div>
+                                ${sharedPeelTermini.slice(0, 5).map((t) => {
+                                    const addr = typeof t === 'string' ? t : (t.address || '');
+                                    const count = typeof t === 'object' ? (t.sharedBy || '') : '';
+                                    if (!addr) return '';
+                                    return `
+                                        <div class="sub-list-row">
+                                            <a href="https://solscan.io/account/${encodeURIComponent(addr)}" target="_blank" rel="noreferrer" class="mono-link">${escapeHtml(addr)}</a>
+                                            ${count ? `<span>${count} ví hội tụ</span>` : ''}
+                                        </div>
+                                    `;
+                                }).join('')}
                             </div>
                         ` : ''}
                     `
@@ -848,8 +929,28 @@ function renderAnalysis(data) {
         holderStats.topHolders.slice(0, 10).forEach((holder, index) => {
             const addr = holder.address || holder.owner || '';
             const pct = safeNumber(holder.percent || holder.percentage, 0);
-            const role = holder.isDev ? 'Dev' : holder.isBundle ? 'Bundle' : holder.isPool ? 'Pool' : 'Holder';
-            const tone = holder.isDev ? 'yellow' : holder.isBundle ? 'red' : holder.isPool ? '' : (pct > 10 ? 'red' : 'green');
+            // Role priority: Dev > Jito Bundle (real) > Bundle (co-launch) > Pool > Holder
+            let role = 'Holder';
+            let roleClass = 'old';
+            let roleTitle = '';
+            if (holder.isDev) {
+                role = 'Dev';
+                roleClass = 'dev';
+                roleTitle = 'Ví deployer';
+            } else if (holder.isJitoBundle) {
+                role = 'Jito Bundle';
+                roleClass = 'white';
+                roleTitle = 'Ví trong Jito Bundle thật (có tip Jito)';
+            } else if (holder.isBundle) {
+                role = 'Bundle';
+                roleClass = 'white';
+                roleTitle = 'Ví trong cùng slot ≥ 4 ví (co-launch)';
+            } else if (holder.isPool) {
+                role = 'Pool';
+                roleClass = 'old';
+                roleTitle = 'LP / Bonding curve';
+            }
+            const tone = holder.isDev ? 'yellow' : (holder.isJitoBundle || holder.isBundle) ? 'red' : holder.isPool ? '' : (pct > 10 ? 'red' : 'green');
             html += `
                 <tr>
                     <td>${index + 1}</td>
@@ -857,7 +958,7 @@ function renderAnalysis(data) {
                         <a href="https://solscan.io/account/${encodeURIComponent(addr)}" target="_blank" rel="noreferrer" class="mono-link" title="${escapeHtml(addr)}">${escapeHtml(addr || '---')}</a>
                     </td>
                     <td class="${tone}">${pct.toFixed(1)}%</td>
-                    <td><span class="wallet-tag ${holder.isDev ? 'dev' : holder.isBundle ? 'white' : holder.isPool ? 'old' : 'old'}">${role}</span></td>
+                    <td><span class="wallet-tag ${roleClass}"${roleTitle ? ` title="${escapeHtml(roleTitle)}"` : ''}>${role}</span></td>
                 </tr>
             `;
         });
@@ -882,6 +983,9 @@ function renderAnalysis(data) {
         const totalSolSpent = earlyBuyers.reduce((sum, buyer) => sum + safeNumber(buyer.solAmount, 0), 0);
         const cexFundedCount = earlyBuyers.filter((buyer) => buyer.sourceOfFunds?.hasCEXFunding).length;
 
+        const insiderPeelBuyersCount = earlyBuyers.filter(b => b.peelChain?.terminus === 'DEPLOYER').length;
+        const cexPeelBuyersCount = earlyBuyers.filter(b => b.peelChain?.terminus === 'CEX').length;
+
         html += `<div class="section-title"><i class="fas fa-wallet"></i> ${renderTerm('Early Buyers', 'earlyBuyers')}</div>`;
         html += `
             <div class="summary-chip-grid buyers-summary-grid">
@@ -889,8 +993,8 @@ function renderAnalysis(data) {
                     <span>Tổng buyer</span>
                     <strong>${earlyBuyers.length}</strong>
                 </div>
-                <div class="summary-chip warning">
-                    <span>Ví mới</span>
+                <div class="summary-chip ${freshCount > 0 ? 'warning' : ''}">
+                    <span>Ví mới (1h/2tx)</span>
                     <strong>${freshCount}</strong>
                 </div>
                 <div class="summary-chip positive">
@@ -901,6 +1005,16 @@ function renderAnalysis(data) {
                     <span>CEX funding</span>
                     <strong>${cexFundedCount}</strong>
                 </div>
+                ${insiderPeelBuyersCount > 0 ? `
+                <div class="summary-chip negative" title="Số ví mới mà peel-chain dẫn về deployer (insider rất mạnh)">
+                    <span>🚨 Peel → Dev</span>
+                    <strong>${insiderPeelBuyersCount}</strong>
+                </div>` : ''}
+                ${cexPeelBuyersCount > 0 ? `
+                <div class="summary-chip" title="Số ví mới mà peel-chain dẫn về CEX (organic)">
+                    <span>Peel → CEX</span>
+                    <strong>${cexPeelBuyersCount}</strong>
+                </div>` : ''}
             </div>
             <div class="data-table-card">
                 <div class="buyers-table-container">
@@ -916,6 +1030,7 @@ function renderAnalysis(data) {
                                 <th>Tuổi</th>
                                 <th>TX</th>
                                 <th>Nguồn vốn</th>
+                                <th title="${escapeHtml(TERM_TOOLTIPS.peelChain)}">Peel-chain</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -930,11 +1045,32 @@ function renderAnalysis(data) {
             const sig = trade?.signature || buyer.signature || '';
             const sigShort = sig ? `${sig.substring(0, 8)}...` : '';
             const solscanUrl = sig ? `https://solscan.io/tx/${encodeURIComponent(sig)}` : '';
-            const source = buyer.sourceOfFunds?.hasCEXFunding
-                ? `<span class="analysis-source-cex">CEX</span>`
+
+            // Source: hiển thị tên CEX cụ thể nếu có (Binance/MEXC/...) thay vì "CEX" generic
+            const cexSource = buyer.sourceOfFunds?.sources?.find?.(s => s.type === 'cex');
+            const cexLabel = cexSource?.name || (buyer.sourceOfFunds?.hasCEXFunding ? 'CEX' : null);
+            const source = cexLabel
+                ? `<span class="analysis-source-cex" title="Funded từ ${escapeHtml(cexLabel)}">${escapeHtml(cexLabel)}</span>`
                 : buyer.fundingWallets?.length > 0
                     ? `<span title="${escapeHtml((buyer.fundingWallets || []).slice(0, 3).join(', '))}">Ví (${buyer.fundingWallets.length})</span>`
                     : '<span class="analysis-source-muted">---</span>';
+
+            // Peel-chain terminus column
+            const pc = buyer.peelChain;
+            let peelHtml;
+            if (!pc) {
+                peelHtml = '<span class="analysis-source-muted">—</span>';
+            } else if (pc.terminus === 'DEPLOYER') {
+                peelHtml = `<span class="analysis-source-cex" style="background:rgba(255,80,80,0.15);color:var(--red,#ff5050)" title="${pc.hops} hop về deployer">🚨 Dev (${pc.hops}h)</span>`;
+            } else if (pc.terminus === 'CEX') {
+                peelHtml = `<span class="analysis-source-cex" title="${pc.hops} hop về ${pc.terminusLabel || 'CEX'}">${escapeHtml(pc.terminusLabel || 'CEX')} (${pc.hops}h)</span>`;
+            } else if (pc.terminus === 'DEPTH_LIMIT' || pc.terminus === 'UNKNOWN') {
+                peelHtml = `<span title="Không rõ — đã trace ${pc.hops} hop">? (${pc.hops}h)</span>`;
+            } else if (pc.terminus === 'NO_FUNDER') {
+                peelHtml = `<span title="Không tìm được funder">—</span>`;
+            } else {
+                peelHtml = `<span>${escapeHtml(pc.terminus)}</span>`;
+            }
 
             html += `
                 <tr>
@@ -947,9 +1083,10 @@ function renderAnalysis(data) {
                     <td>${tokenAmount > 0 ? formatNumber(tokenAmount) : '---'}</td>
                     <td><span class="wallet-tag ${tagClass}">${tagText}</span></td>
                     <td>${safeNumber(buyer.balance, 0).toFixed(3)}</td>
-                    <td>${buyer.walletAgeDays !== undefined ? `${buyer.walletAgeDays}d` : (buyer.walletAgeSeconds ? `${Math.floor(buyer.walletAgeSeconds / 86400)}d` : '---')}</td>
-                    <td>${buyer.txCount || 0}</td>
+                    <td>${buyer.sigLimitMaxedOut ? '>' : ''}${buyer.walletAgeDays !== undefined ? `${buyer.walletAgeDays}d` : (buyer.walletAgeSeconds ? `${Math.floor(buyer.walletAgeSeconds / 86400)}d` : '---')}</td>
+                    <td>${buyer.txCount || 0}${buyer.sigLimitMaxedOut ? '+' : ''}</td>
                     <td>${source}</td>
+                    <td>${peelHtml}</td>
                 </tr>
             `;
         });
